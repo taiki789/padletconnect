@@ -1,22 +1,37 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 export function getAdminApp() {
+  if (getApps().length > 0) {
+    return getApps()[0];
+  }
+
+  // 1. JSON文字列が丸ごと環境変数にある場合
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (serviceAccountJson) {
+    try {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      return initializeApp({
+        credential: cert(serviceAccount),
+      });
+    } catch (e) {
+      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", e);
+    }
+  }
+
+  // 2. 個別の環境変数で設定されている場合
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  const serviceAccountFile = process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
-  if (serviceAccountFile) {
-    const serviceAccount = JSON.parse(readFileSync(resolve(process.cwd(), serviceAccountFile), "utf8"));
-    return getApps()[0] ?? initializeApp({ credential: cert(serviceAccount) });
-  }
+
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error("Firebase Admin SDKの環境変数が設定されていません。");
   }
-  return getApps()[0] ?? initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+
+  return initializeApp({
+    credential: cert({ projectId, clientEmail, privateKey }),
+  });
 }
 
 export function getAdminFirestore() {
