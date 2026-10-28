@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PrizeConfig {
+  id           Int      @id @default(1)
+  initialStock Int
+  currentStock Int
+  distributed  Int      @default(0)
+  initialStock3 Int     @default(0)
+  initialStock2 Int      @default(0)
+  initialStock1 Int      @default(0)
+  stock3       Int      @default(0)
+  stock2       Int      @default(0)
+  stock1       Int      @default(0)
+  measurementStarted Boolean @default(false)
+  isAccepting  Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+}
+
+model Participation {
+  id                 String   @id @default(uuid())
+  score              Int      @default(0)
+  rank               String   @default("参加賞相当")
+  answers            Json?
+  screenshotVerified Boolean  @default(false)
+  redeemed           Boolean  @default(false)
+  redeemedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model OperationLog {
+  id          String   @id @default(uuid())
+  action      String
+  beforeStock Int?
+  afterStock  Int?
+  note        String?
+  createdAt   DateTime @default(now())
+}

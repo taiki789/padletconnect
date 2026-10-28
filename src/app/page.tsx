@@ -1,7 +1,186 @@
+"use client";
+
+import { ChangeEvent, startTransition, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CAMPUS_MAP_HIGHLIGHT_PATH, PADLET_URL, quizzes, ranks } from "@/data/quizzes";
+
+type Screen = "start" | "mission1" | "quiz" | "result" | "mission2" | "upload" | "final" | "soldout";
+type SavedState = {
+  participationId: string | null;
+  quizIds: string[];
+  screen: Screen;
+  questionIndex: number;
+  answers: (number | null)[];
+  score: number;
+  screenshotVerified: boolean;
+};
+
+const INITIAL_STATE: SavedState = {
+  participationId: null,
+  quizIds: [],
+  screen: "start",
+  questionIndex: 0,
+  answers: [],
+  score: 0,
+  screenshotVerified: false,
+};
+const STORAGE_KEY = "machikanefes-participation-v2";
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <p className="label">{children}</p>;
+}
+
+function ActionButton({ children, onClick, secondary = false, disabled = false }: { children: React.ReactNode; onClick: () => void; secondary?: boolean; disabled?: boolean }) {
+  return <button className={`action-button${secondary ? " secondary" : ""}`} onClick={onClick} disabled={disabled}>{children}</button>;
+}
+
 export default function Home() {
-  return (
-    <main>
-      <div>Hello world!</div>
-    </main>
-  );
+  const router = useRouter();
+  const [state, setState] = useState<SavedState>(INITIAL_STATE);
+  const [hydrated, setHydrated] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [staffCode, setStaffCode] = useState("");
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemed, setRedeemed] = useState(false);
+  const [prizeAvailable, setPrizeAvailable] = useState(true);
+  const [checkingPrize, setCheckingPrize] = useState(false);
+
+  useEffect(() => {
+    startTransition(() => {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Partial<SavedState>;
+          if (Array.isArray(parsed.quizIds) && Array.isArray(parsed.answers)) {
+            setState({ ...INITIAL_STATE, ...parsed, quizIds: parsed.quizIds, answers: parsed.answers });
+          } else {
+            window.localStorage.removeItem(STORAGE_KEY);
+          }
+        } catch { window.localStorage.removeItem(STORAGE_KEY); }
+      }
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [hydrated, state]);
+
+  useEffect(() => {
+    if (state.screen !== "final") return;
+    fetch("/api/prize/status").then((response) => response.json()).then((result: { currentStock: number; isAccepting: boolean }) => {
+      startTransition(() => setPrizeAvailable(result.currentStock > 0 && result.isAccepting));
+    }).catch(() => setPrizeAvailable(true));
+  }, [state.screen]);
+
+  const activeQuizzes = state.quizIds.length
+    ? state.quizIds.map((id) => quizzes.find((quiz) => quiz.id === id)).filter((quiz): quiz is (typeof quizzes)[number] => Boolean(quiz))
+    : quizzes.slice(0, 3);
+  const question = activeQuizzes[state.questionIndex] ?? activeQuizzes[0];
+  const rank = ranks[Math.min(state.score, ranks.length - 1)];
+  const setScreen = (screen: Screen) => setState((current) => ({ ...current, screen }));
+  const start = async () => {
+    setCheckingPrize(true);
+    try {
+      const prizeResponse = await fetch("/api/prize/status", { cache: "no-store" });
+      if (prizeResponse.ok) {
+        const prizeStatus = await prizeResponse.json() as { currentStock: number; isAccepting: boolean };
+        if (prizeStatus.currentStock <= 0 || !prizeStatus.isAccepting) {
+          setState({ ...INITIAL_STATE, screen: "soldout" });
+          return;
+        }
+      }
+    } catch {
+      // Continue only when the status service is unavailable; the server checks again at redemption.
+    } finally {
+      setCheckingPrize(false);
+    }
+    const quizIds = [...quizzes].sort(() => Math.random() - 0.5).slice(0, 3).map((quiz) => quiz.id);
+    setState({ ...INITIAL_STATE, quizIds, answers: Array(quizIds.length).fill(null), screen: "mission1" });
+    void fetch("/api/participation", { method: "POST" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const result = await response.json() as { participationId: string };
+        setState((current) => ({ ...current, participationId: result.participationId }));
+      })
+      .catch(() => {
+        // The quiz remains usable when the database is temporarily unavailable.
+      });
+  };
+  const returnHome = () => {
+    window.localStorage.removeItem(STORAGE_KEY);
+    setState(INITIAL_STATE);
+  };
+  const chooseAnswer = (choice: number) => {
+    if (state.answers[state.questionIndex] !== null) return;
+    setSelected(choice);
+  };
+  const confirmAnswer = () => {
+    if (selected === null) return;
+    const answers = [...state.answers];
+    answers[state.questionIndex] = selected;
+    setState((current) => ({ ...current, answers, score: answers.filter((answer, index) => answer === activeQuizzes[index]?.answer).length }));
+    setSelected(null);
+  };
+  const nextQuestion = () => {
+    if (state.questionIndex === activeQuizzes.length - 1) setScreen("result");
+    else setState((current) => ({ ...current, questionIndex: current.questionIndex + 1 }));
+  };
+  const reset = () => {
+    if (window.confirm("今の参加記録をリセットして、最初から遊びますか？")) start();
+  };
+
+  const submitScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setSubmitting(true);
+    const formData = new FormData();
+    formData.append("screenshot", file);
+    formData.append("score", String(state.score));
+    if (state.participationId) formData.append("participationId", state.participationId);
+    try {
+      const response = await fetch("/api/screenshot", { method: "POST", body: formData });
+      const result = await response.json() as { error?: string; verified?: boolean };
+      if (!response.ok) throw new Error(result.error ?? "提出に失敗しました。");
+      setState((current) => ({ ...current, screenshotVerified: Boolean(result.verified), screen: "final" }));
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : "提出に失敗しました。再度お試しください。");
+    } finally { setSubmitting(false); }
+  };
+
+  const redeemPrize = async () => {
+    if (staffCode === "10101") {
+      router.push("/manage/staff");
+      return;
+    }
+    if (staffCode !== "7777") {
+      setError("スタッフ用パスコードが正しくありません。");
+      return;
+    }
+    if (!state.participationId) { setError("参加記録が見つかりません。最初からやり直してください。"); return; }
+    setRedeeming(true); setError("");
+    try {
+      const response = await fetch("/api/prize/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participationId: state.participationId, passcode: staffCode }) });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "引換に失敗しました。");
+      setRedeemed(true);
+    } catch (redeemError) { setError(redeemError instanceof Error ? redeemError.message : "引換に失敗しました。"); }
+    finally { setRedeeming(false); }
+  };
+
+  return <main className="paper-shell">
+    <header className="masthead"><span>まちかね祭 / 2026</span><span>謎解き特別号</span></header>
+    {state.screen === "start" && <section className="hero-section"><Label>MISSION 01 / 02</Label><h1>まちかね祭<br /><em>謎解き探検</em></h1><p className="lead">会場を歩いて、ひらめいて、<br />最後にメッセージを残そう。</p><div className="rule" /><ActionButton onClick={start} disabled={checkingPrize}>{checkingPrize ? "景品状況を確認中..." : "謎解きをスタート →"}</ActionButton><p className="notice">※景品には数に限りがあります。なくなり次第終了します。</p></section>}
+    {state.screen === "soldout" && <section className="content-section soldout-section"><Label>FINAL / SOLD OUT</Label><p className="complete-mark">SOLD OUT</p><h2>ごめんなさい！<br />景品の配布は終了しました</h2><p>まちかね祭の謎解きに参加してくれて、ありがとうございます！</p><p>用意していた景品はすべてなくなりました。せっかく参加してくれたのに、ごめんなさい。</p><p>ぜひ、引き続きまちかね祭を楽しんでいってください！</p><button className="reset-button" onClick={returnHome}>ホームへ戻る</button></section>}
+    {state.screen === "mission1" && <section className="content-section"><Label>MISSION 01</Label><h2>5つの問いに<br />挑戦しよう。</h2><p>クイズは全部で5問。正解数に応じて、あなたのランクが決まります。0問正解でも、次のミッションへ進めます。</p><div className="stat-grid"><div><strong>05</strong><span>QUESTIONS</span></div><div><strong>∞</strong><span>TRY AGAIN</span></div></div><ActionButton onClick={() => setScreen("quiz")}>クイズを始める →</ActionButton></section>}
+    {state.screen === "quiz" && <section className="content-section"><div className="question-top"><Label>QUESTION {String(state.questionIndex + 1).padStart(2, "0")} / {String(activeQuizzes.length).padStart(2, "0")}</Label><span>{state.questionIndex + 1} / {activeQuizzes.length}</span></div><div className="progress"><i style={{ width: `${((state.questionIndex + 1) / activeQuizzes.length) * 100}%` }} /></div><h2 className="question-title">{question.question}</h2><div className="choices">{question.choices.map((choice, index) => <button key={choice} className={`choice ${selected === index ? "selected" : ""} ${state.answers[state.questionIndex] !== null && index === question.answer ? "correct" : ""}`} onClick={() => chooseAnswer(index)}>{String.fromCharCode(65 + index)} <span>{choice}</span></button>)}</div>{state.answers[state.questionIndex] === null ? <ActionButton onClick={confirmAnswer} disabled={selected === null}>回答を確定する</ActionButton> : <div className="feedback"><strong>{state.answers[state.questionIndex] === question.answer ? "正解！" : "不正解"}</strong><p>{question.explanation}</p><ActionButton onClick={nextQuestion}>{state.questionIndex === activeQuizzes.length - 1 ? "結果を見る →" : "次の問題へ →"}</ActionButton></div>}</section>}
+    {state.screen === "result" && <section className="content-section result-section"><Label>MISSION 01 / RESULT</Label><h2>あなたの結果</h2><div className="score"><strong>{state.score}<small> / {activeQuizzes.length}</small></strong><span>正解数</span></div><p className="rank-stamp">{rank}</p><p>ここまで来たあなたは立派な探検者。次は、みんなの声を掲示板に届けよう。</p><ActionButton onClick={() => setScreen("mission2")}>MISSION 02 へ進む →</ActionButton></section>}
+    {state.screen === "mission2" && <section className="content-section"><Label>MISSION 02</Label><h2>ひとこと、<br />残していこう。</h2><p>Padletに、まちかね祭の感想やメッセージを投稿してください。</p><ul className="idea-list"><li>まちかね祭で楽しかったこと</li><li>おもしろかった展示や企画</li><li>参加した団体へのメッセージ</li><li>これから来る人へのおすすめ</li></ul><a className="action-button link-button" href={PADLET_URL} target="_blank" rel="noopener noreferrer">Padletを開く ↗</a><p className="notice">投稿した画面のスクリーンショットを撮って、この画面に戻ってきてください。</p><ActionButton onClick={() => setScreen("upload")} secondary>スクショ提出へ進む →</ActionButton></section>}
+    {state.screen === "upload" && <section className="content-section"><Label>STEP 02 / SUBMIT</Label><h2>投稿を<br />確認します。</h2><p>Padletに投稿した画面のスクリーンショットを選択してください。</p><label className="file-picker"><span>{submitting ? "確認中..." : "画像を選択する"}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={submitScreenshot} disabled={submitting} /></label>{error && <p className="error-message">{error}</p>}<p className="notice">対応形式：JPEG / PNG / WebP　最大10MB</p><ActionButton onClick={() => window.open(PADLET_URL, "_blank", "noopener,noreferrer")} secondary>Padletに戻る ↗</ActionButton></section>}
+    {state.screen === "final" && <section className="content-section final-section"><Label>FINAL / COMPLETE</Label><p className="complete-mark">{redeemed ? "THANK YOU!" : !prizeAvailable ? "SOLD OUT" : "COMPLETE!"}</p><h2>{redeemed ? "ありがとうございました。" : !prizeAvailable ? "ごめんなさい！景品の配布は終了しました" : "ミッション達成。"}</h2><p>{redeemed ? "景品の配布が完了しました。ありがとうございました。" : !prizeAvailable ? "まちかね祭の謎解きに参加してくれて、ありがとうございます。用意していた景品はすべてなくなりました。ぜひ、引き続きまちかね祭を楽しんでいってください。" : "投稿の確認が完了しました。景品交換場所で、この画面をスタッフに提示してください。"}</p><div className="summary"><span>正解数</span><strong>{state.score} / {activeQuizzes.length}　{rank}</strong><span>交換場所</span><strong>大阪大学 多目的倉庫</strong></div><div className="map-panel">{/* eslint-disable-next-line @next/next/no-img-element */}<img className="campus-map" src={CAMPUS_MAP_HIGHLIGHT_PATH} alt="大学キャンパス地図" /></div>{!redeemed && prizeAvailable && <div className="staff-area"><Label>STAFF ONLY</Label><p>スタッフの方がこの画面でパスコードを入力してください。</p><input className="staff-code" type="password" value={staffCode} onChange={(event) => setStaffCode(event.target.value)} placeholder="スタッフ用パスコード" /><ActionButton onClick={redeemPrize} disabled={redeeming}>{redeeming ? "確認中..." : "景品を配布確定する"}</ActionButton>{error && <p className="error-message">{error}</p>}</div>}<button className="reset-button" onClick={reset}>もう一度最初から遊ぶ</button></section>}
+    <footer><span>MAチカネ / PUZZLE WALK</span><span>NO. 001</span></footer>
+  </main>;
 }
