@@ -29,12 +29,8 @@ export async function isAdminAuthenticated(request?: NextRequest) {
     const token = request.cookies.get(COOKIE_NAME)?.value;
     if (token && isValidAdminToken(token)) return true;
   }
-  try {
-    const cookieStore = await cookies();
-    return isValidAdminToken(cookieStore.get(COOKIE_NAME)?.value);
-  } catch {
-    return false;
-  }
+  const cookieStore = await cookies();
+  return isValidAdminToken(cookieStore.get(COOKIE_NAME)?.value);
 }
 
 export const adminCookieName = COOKIE_NAME;

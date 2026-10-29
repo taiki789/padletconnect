@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
 
 export async function GET(_request: NextRequest) {
+  await connection();
   try {
     const app = getAdminApp();
 
-    // ビルド時のダミー初期化時は安全にデフォルト値を返す
     if (app.options.projectId === "placeholder-build") {
       return NextResponse.json({ currentStock: 0, isAccepting: false });
     }

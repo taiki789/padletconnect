@@ -220,7 +220,11 @@ export default function Home() {
       const response = await fetch("/api/prize/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participationId: currentId, passcode: staffCode }),
+        body: JSON.stringify({
+          participationId: currentId,
+          passcode: staffCode,
+          score: state.score,
+        }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "引換に失敗しました。");

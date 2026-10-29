@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
 
@@ -18,6 +18,7 @@ async function getPrize() {
 }
 
 export async function GET(request: NextRequest) {
+  await connection();
   try {
     if (!await isAdminAuthenticated(request)) {
       return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
@@ -117,7 +118,6 @@ async function handleUpdate(request: NextRequest) {
       return NextResponse.json({ error: "無効な操作です。" }, { status: 400 });
     }
 
-    // トランザクションのオーバーヘッドを避け、直接ドキュメントを更新
     await Promise.all([
       prizeReference.set(next),
       logReference.set({
