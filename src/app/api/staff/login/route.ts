@@ -6,23 +6,29 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { password?: string };
     const expectedPassword = process.env.ADMIN_PASSWORD || "10101";
+    const staffPasscode = process.env.STAFF_PASSCODE || "7777";
 
-    if (!body.password || (body.password !== expectedPassword && body.password !== "10101")) {
+    // 10101 でも 7777 でも、設定された環境変数でもログインを許可
+    const isValidPassword =
+      Boolean(body.password) &&
+      (body.password === expectedPassword ||
+        body.password === "10101" ||
+        body.password === staffPasscode ||
+        body.password === "7777");
+
+    if (!isValidPassword) {
       return NextResponse.json({ error: "パスワードが正しくありません。" }, { status: 401 });
     }
 
-    let firebaseToken: string;
+    // Firebase Auth トークンの生成を試みるが、失敗しても管理者Cookieでログインを継続
+    let firebaseToken: string | undefined;
     try {
       firebaseToken = await createStaffCustomToken();
-    } catch (error) {
-      console.error("Failed to create staff custom token:", error);
-      return NextResponse.json(
-        { error: "Firebase認証トークンの作成に失敗しました: " + (error instanceof Error ? error.message : "設定を確認してください。") },
-        { status: 503 }
-      );
+    } catch (authError) {
+      console.warn("createStaffCustomToken failed (proceeding with session cookie):", authError);
     }
 
-    const response = NextResponse.json({ authenticated: true, firebaseToken });
+    const response = NextResponse.json({ authenticated: true, firebaseToken: firebaseToken || null });
     response.cookies.set(adminCookieName, createAdminToken(), {
       httpOnly: true,
       sameSite: "strict",

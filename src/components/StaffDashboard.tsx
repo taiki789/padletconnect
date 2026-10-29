@@ -38,18 +38,44 @@ export default function StaffDashboard() {
         setPrize(nextPrize);
         setStocks({ stock3: String(nextPrize.stock3), stock2: String(nextPrize.stock2), stock1: String(nextPrize.stock1) });
       } else setError("景品情報の応答を読み取れませんでした。再度最新化してください。");
-    } else { setPrize(EMPTY_PRIZE); setError("DBに接続できていないため、入力内容は保存されません。DATABASE_URLを設定してください。"); }
+    } else {
+      setPrize(EMPTY_PRIZE);
+      setError("景品情報の取得に失敗しました。Firebase設定（FIREBASE_SERVICE_ACCOUNT_KEY）をご確認ください。");
+    }
     if (logsResponse.ok) setLogs((await readJson<Log[]>(logsResponse)) ?? []);
     setLoading(false);
   };
 
   const login = async () => {
     setLoading(true);
-    const response = await fetch("/api/staff/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
-    const result = await readJson<{ firebaseToken?: string; error?: string }>(response);
-    if (!response.ok || !result?.firebaseToken) { setError(result?.error ?? "パスワードまたはFirebase設定が正しくありません。"); setLoading(false); return; }
-    await signInWithCustomToken(firebaseAuth, result.firebaseToken);
-    setAuthenticated(true); setError(""); await refresh();
+    setError("");
+    try {
+      const response = await fetch("/api/staff/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const result = await readJson<{ firebaseToken?: string | null; authenticated?: boolean; error?: string }>(response);
+      if (!response.ok || !result?.authenticated) {
+        setError(result?.error ?? `ログインに失敗しました（HTTP ${response.status}）。パスワードをご確認ください。`);
+        setLoading(false);
+        return;
+      }
+      if (result.firebaseToken) {
+        try {
+          await signInWithCustomToken(firebaseAuth, result.firebaseToken);
+        } catch (authError) {
+          console.warn("Client Firebase Auth sign-in skipped:", authError);
+        }
+      }
+      setAuthenticated(true);
+      setError("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "通信エラーが発生しました。");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const update = async (action: string) => {
