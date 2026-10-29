@@ -31,7 +31,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: Request) {
+async function handleUpdate(request: Request) {
   try {
     if (!await isAdminAuthenticated()) {
       return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
@@ -42,7 +42,13 @@ export async function PATCH(request: Request) {
       throw new Error("Firebaseが初期化されていません。環境変数 FIREBASE_SERVICE_ACCOUNT_KEY を設定してください。");
     }
 
-    const body = await request.json() as { action?: string; stock3?: number; stock2?: number; stock1?: number; note?: string };
+    let body: { action?: string; stock3?: number; stock2?: number; stock1?: number; note?: string };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "リクエストデータが正しくありません。" }, { status: 400 });
+    }
+
     const db = getAdminFirestore();
     const prizeReference = db.doc(prizePath);
     const logReference = db.collection("prizeLogs").doc();
@@ -81,7 +87,7 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    console.error("PATCH /api/staff/prize error:", error);
+    console.error("Update /api/staff/prize error:", error);
     let message = "操作に失敗しました。";
     if (error instanceof Error) {
       if (error.message === "PRIZE_UNAVAILABLE") message = "景品数0または受付終了中です。";
@@ -90,4 +96,12 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+export async function PATCH(request: Request) {
+  return handleUpdate(request);
+}
+
+export async function POST(request: Request) {
+  return handleUpdate(request);
 }
