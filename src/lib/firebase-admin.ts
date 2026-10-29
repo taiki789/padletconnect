@@ -17,7 +17,7 @@ export function getAdminApp(): App {
     try {
       const filePath = path.isAbsolute(serviceAccountFile)
         ? serviceAccountFile
-        : path.resolve(process.cwd(), serviceAccountFile);
+        : path.resolve(/*turbopackIgnore: true*/ process.cwd(), serviceAccountFile);
       if (fs.existsSync(filePath)) {
         const fileContent = fs.readFileSync(filePath, "utf-8");
         const serviceAccount = JSON.parse(fileContent);
