@@ -132,25 +132,23 @@ export default function Home() {
     if (window.confirm("今の参加記録をリセットして、最初から遊びますか？")) start();
   };
 
-  const submitScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
+  const submitScreenshot = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
     setError("");
     setSubmitting(true);
-    const formData = new FormData();
-    formData.append("screenshot", file);
-    formData.append("score", String(state.score));
-    if (state.participationId) formData.append("participationId", state.participationId);
-    try {
-      const response = await fetch("/api/screenshot", { method: "POST", body: formData });
-      const result = await response.json() as { error?: string; verified?: boolean };
-      if (!response.ok) throw new Error(result.error ?? "提出に失敗しました。");
-      setState((current) => ({ ...current, screenshotVerified: Boolean(result.verified), screen: "final" }));
-    } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : "提出に失敗しました。再度お試しください。");
-    } finally { setSubmitting(false); }
-  };
 
+    // サーバー保存・通信は行わず、画像が選択されたら即座に完了画面へ移行
+    setState((current) => ({
+      ...current,
+      screenshotVerified: true,
+      screen: "final",
+    }));
+
+    setSubmitting(false);
+  };
+  
   const redeemPrize = async () => {
     if (staffCode === "10101") {
       router.push("/manage/staff");
