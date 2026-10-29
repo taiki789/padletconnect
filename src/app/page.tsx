@@ -37,7 +37,6 @@ function ActionButton({ children, onClick, secondary = false, disabled = false }
 export default function Home() {
   const router = useRouter();
   const [state, setState] = useState<SavedState>(INITIAL_STATE);
-  const [hydrated, setHydrated] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -48,25 +47,8 @@ export default function Home() {
   const [checkingPrize, setCheckingPrize] = useState(false);
 
   useEffect(() => {
-    startTransition(() => {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as Partial<SavedState>;
-          if (Array.isArray(parsed.quizIds) && Array.isArray(parsed.answers)) {
-            setState({ ...INITIAL_STATE, ...parsed, quizIds: parsed.quizIds, answers: parsed.answers });
-          } else {
-            window.localStorage.removeItem(STORAGE_KEY);
-          }
-        } catch { window.localStorage.removeItem(STORAGE_KEY); }
-      }
-      setHydrated(true);
-    });
+    window.localStorage.removeItem(STORAGE_KEY);
   }, []);
-
-  useEffect(() => {
-    if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [hydrated, state]);
 
   useEffect(() => {
     if (state.screen !== "final") return;
@@ -99,6 +81,10 @@ export default function Home() {
       setCheckingPrize(false);
     }
     const quizIds = [...quizzes].sort(() => Math.random() - 0.5).slice(0, 3).map((quiz) => quiz.id);
+    setRedeemed(false);
+    setStaffCode("");
+    setError("");
+    setSelected(null);
     setState({ ...INITIAL_STATE, quizIds, answers: Array(quizIds.length).fill(null), screen: "mission1" });
     void fetch("/api/participation", { method: "POST" })
       .then(async (response) => {
@@ -113,6 +99,10 @@ export default function Home() {
 
   const returnHome = () => {
     window.localStorage.removeItem(STORAGE_KEY);
+    setRedeemed(false);
+    setStaffCode("");
+    setError("");
+    setSelected(null);
     setState(INITIAL_STATE);
   };
 
@@ -135,7 +125,7 @@ export default function Home() {
   };
 
   const reset = () => {
-    if (window.confirm("今の参加記録をリセットして、最初から遊びますか？")) start();
+    if (window.confirm("今の参加記録をリセットして、最初から遊びますか？")) returnHome();
   };
 
   const submitScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
