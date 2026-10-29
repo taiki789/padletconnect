@@ -81,6 +81,7 @@ export default function Home() {
   const question = activeQuizzes[state.questionIndex] ?? activeQuizzes[0];
   const rank = ranks[Math.min(state.score, ranks.length - 1)];
   const setScreen = (screen: Screen) => setState((current) => ({ ...current, screen }));
+
   const start = async () => {
     setCheckingPrize(true);
     try {
@@ -109,14 +110,17 @@ export default function Home() {
         // The quiz remains usable when the database is temporarily unavailable.
       });
   };
+
   const returnHome = () => {
     window.localStorage.removeItem(STORAGE_KEY);
     setState(INITIAL_STATE);
   };
+
   const chooseAnswer = (choice: number) => {
     if (state.answers[state.questionIndex] !== null) return;
     setSelected(choice);
   };
+
   const confirmAnswer = () => {
     if (selected === null) return;
     const answers = [...state.answers];
@@ -124,24 +128,54 @@ export default function Home() {
     setState((current) => ({ ...current, answers, score: answers.filter((answer, index) => answer === activeQuizzes[index]?.answer).length }));
     setSelected(null);
   };
+
   const nextQuestion = () => {
     if (state.questionIndex === activeQuizzes.length - 1) setScreen("result");
     else setState((current) => ({ ...current, questionIndex: current.questionIndex + 1 }));
   };
+
   const reset = () => {
     if (window.confirm("今の参加記録をリセットして、最初から遊びますか？")) start();
   };
 
-  const submitScreenshot = (event: ChangeEvent<HTMLInputElement>) => {
+  const submitScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setError("");
     setSubmitting(true);
 
-    // サーバー保存・通信は行わず、画像が選択されたら即座に完了画面へ移行
+    let currentId = state.participationId;
+
+    // participationId が未取得の場合はここで作成を試みる
+    if (!currentId) {
+      try {
+        const response = await fetch("/api/participation", { method: "POST" });
+        if (response.ok) {
+          const result = await response.json() as { participationId: string };
+          currentId = result.participationId;
+        }
+      } catch (err) {
+        console.error("Failed to create participation:", err);
+      }
+    }
+
+    // スクショ検証APIを呼び出してFirestore側のフラグとスコアを更新
+    if (currentId) {
+      try {
+        const formData = new FormData();
+        formData.append("screenshot", file);
+        formData.append("participationId", currentId);
+        formData.append("score", String(state.score));
+        await fetch("/api/screenshot", { method: "POST", body: formData });
+      } catch (uploadErr) {
+        console.error("Screenshot upload api error:", uploadErr);
+      }
+    }
+
     setState((current) => ({
       ...current,
+      participationId: currentId ?? current.participationId,
       screenshotVerified: true,
       screen: "final",
     }));
@@ -158,15 +192,44 @@ export default function Home() {
       setError("スタッフ用パスコードが正しくありません。");
       return;
     }
-    if (!state.participationId) { setError("参加記録が見つかりません。最初からやり直してください。"); return; }
-    setRedeeming(true); setError("");
+
+    setRedeeming(true);
+    setError("");
+
+    let currentId = state.participationId;
+    if (!currentId) {
+      try {
+        const response = await fetch("/api/participation", { method: "POST" });
+        if (response.ok) {
+          const result = await response.json() as { participationId: string };
+          currentId = result.participationId;
+          setState((current) => ({ ...current, participationId: currentId }));
+        }
+      } catch (err) {
+        console.error("Auto recovery failed:", err);
+      }
+    }
+
+    if (!currentId) {
+      setError("参加記録の取得に失敗しました。電波の良い場所で再度お試しください。");
+      setRedeeming(false);
+      return;
+    }
+
     try {
-      const response = await fetch("/api/prize/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participationId: state.participationId, passcode: staffCode }) });
+      const response = await fetch("/api/prize/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participationId: currentId, passcode: staffCode }),
+      });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "引換に失敗しました。");
       setRedeemed(true);
-    } catch (redeemError) { setError(redeemError instanceof Error ? redeemError.message : "引換に失敗しました。"); }
-    finally { setRedeeming(false); }
+    } catch (redeemError) {
+      setError(redeemError instanceof Error ? redeemError.message : "引換に失敗しました。");
+    } finally {
+      setRedeeming(false);
+    }
   };
 
   return <main className="paper-shell">

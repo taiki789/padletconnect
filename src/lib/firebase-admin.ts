@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { cert, getApps, initializeApp, App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Firestore } from "firebase-admin/firestore";
@@ -9,6 +11,27 @@ export function getAdminApp(): App {
     return getApps()[0];
   }
 
+  // 1. ファイルパスからの読み込み (FIREBASE_SERVICE_ACCOUNT_FILE)
+  const serviceAccountFile = process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
+  if (serviceAccountFile) {
+    try {
+      const filePath = path.isAbsolute(serviceAccountFile)
+        ? serviceAccountFile
+        : path.resolve(process.cwd(), serviceAccountFile);
+      if (fs.existsSync(filePath)) {
+        const fileContent = fs.readFileSync(filePath, "utf-8");
+        const serviceAccount = JSON.parse(fileContent);
+        adminApp = initializeApp({
+          credential: cert(serviceAccount),
+        });
+        return adminApp;
+      }
+    } catch (e) {
+      console.error("FIREBASE_SERVICE_ACCOUNT_FILE の読み込み/パースに失敗:", e);
+    }
+  }
+
+  // 2. JSON文字列からの読み込み (FIREBASE_SERVICE_ACCOUNT_KEY)
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (serviceAccountJson) {
     try {
@@ -22,6 +45,7 @@ export function getAdminApp(): App {
     }
   }
 
+  // 3. 個別環境変数からの読み込み
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
@@ -33,7 +57,7 @@ export function getAdminApp(): App {
     return adminApp;
   }
 
-  // ビルド時のプリレンダリングをパスするためのフォールバック
+  // 4. ビルド時のプリレンダリングをパスするためのフォールバック
   try {
     return initializeApp({ projectId: "placeholder-build" });
   } catch {

@@ -1,33 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
 
-export async function POST(request: NextRequest) {
+export const dynamic = "force-dynamic";
+
+export async function GET(_request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const app = getAdminApp();
 
-    if (!file) {
-      return NextResponse.json(
-        { success: false, message: "画像ファイルが送信されていません。" },
-        { status: 400 }
-      );
+    // ビルド時のダミー初期化時は安全にデフォルト値を返す
+    if (app.options.projectId === "placeholder-build") {
+      return NextResponse.json({ currentStock: 0, isAccepting: false });
     }
 
-    // 画像のバッファデータ取得（保存はせず、判定処理などがある場合はここで使用）
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // --- ここにAI検証や画像チェックロジックがあれば挟む ---
-    // 保存は行わず、チェック成功とみなしてレスポンスを返す
-    console.log(`Received file: ${file.name}, size: ${buffer.length} bytes`);
+    const db = getAdminFirestore();
+    const snapshot = await db.doc("prize/config").get();
+    const prize = snapshot.data();
 
     return NextResponse.json({
-      success: true,
-      message: "投稿が確認できました！",
+      currentStock: prize?.currentStock ?? 0,
+      isAccepting: prize?.isAccepting ?? false,
     });
   } catch (error) {
-    console.error("Screenshot upload error:", error);
+    console.error("Failed to fetch prize config:", error);
     return NextResponse.json(
-      { success: false, message: "画像の処理中にエラーが発生しました。" },
+      { currentStock: 0, isAccepting: false, error: "Internal Server Error" },
       { status: 500 }
     );
   }
