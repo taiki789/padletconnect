@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 
 const COOKIE_NAME = "machikanefes-admin";
 const getSecret = () => process.env.SESSION_SECRET ?? "development-only-secret";
@@ -23,9 +24,17 @@ export function isValidAdminToken(token: string | undefined) {
   return validSignature && Number.isFinite(timestamp) && Date.now() - timestamp < 8 * 60 * 60 * 1000;
 }
 
-export async function isAdminAuthenticated() {
-  const cookieStore = await cookies();
-  return isValidAdminToken(cookieStore.get(COOKIE_NAME)?.value);
+export async function isAdminAuthenticated(request?: NextRequest) {
+  if (request) {
+    const token = request.cookies.get(COOKIE_NAME)?.value;
+    if (token && isValidAdminToken(token)) return true;
+  }
+  try {
+    const cookieStore = await cookies();
+    return isValidAdminToken(cookieStore.get(COOKIE_NAME)?.value);
+  } catch {
+    return false;
+  }
 }
 
 export const adminCookieName = COOKIE_NAME;

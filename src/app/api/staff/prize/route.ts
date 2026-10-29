@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
 
@@ -17,9 +17,9 @@ async function getPrize() {
   return { ...emptyPrize, ...(snapshot.exists ? snapshot.data() : {}) };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    if (!await isAdminAuthenticated()) {
+    if (!await isAdminAuthenticated(request)) {
       return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
     }
     const data = await getPrize();
@@ -31,9 +31,9 @@ export async function GET() {
   }
 }
 
-async function handleUpdate(request: Request) {
+async function handleUpdate(request: NextRequest) {
   try {
-    if (!await isAdminAuthenticated()) {
+    if (!await isAdminAuthenticated(request)) {
       return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
     }
 
@@ -53,55 +53,94 @@ async function handleUpdate(request: Request) {
     const prizeReference = db.doc(prizePath);
     const logReference = db.collection("prizeLogs").doc();
 
-    const result = await db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(prizeReference);
-      const current = { ...emptyPrize, ...(snapshot.exists ? snapshot.data() : {}) } as typeof emptyPrize;
-      if (body.action === "stock") {
-        const values = [body.stock3, body.stock2, body.stock1];
-        if (values.some((value) => !Number.isInteger(value) || (value ?? -1) < 0)) throw new Error("INVALID_STOCK");
-        const stock3 = body.stock3 ?? 0;
-        const stock2 = body.stock2 ?? 0;
-        const stock1 = body.stock1 ?? 0;
-        const total = stock3 + stock2 + stock1;
-        const next = { ...current, initialStock: total, currentStock: total, initialStock3: stock3, initialStock2: stock2, initialStock1: stock1, stock3, stock2, stock1, isAccepting: total === 0 ? false : current.isAccepting };
-        transaction.set(prizeReference, next);
-        transaction.set(logReference, { action: "STOCK_CHANGE", beforeStock: current.currentStock, afterStock: total, note: body.note ?? "", createdAt: new Date() });
-        return next;
+    const snapshot = await prizeReference.get();
+    const current = { ...emptyPrize, ...(snapshot.exists ? snapshot.data() : {}) } as typeof emptyPrize;
+
+    let next = { ...current };
+    let logAction = "";
+    let beforeStock = current.currentStock;
+    let afterStock = current.currentStock;
+
+    if (body.action === "stock") {
+      const values = [body.stock3, body.stock2, body.stock1];
+      if (values.some((value) => !Number.isInteger(value) || (value ?? -1) < 0)) {
+        return NextResponse.json({ error: "景品数は0以上の整数で入力してください。" }, { status: 400 });
       }
-      if (body.action === "start" || body.action === "stop") {
-        if (body.action === "start" && current.currentStock === 0) throw new Error("PRIZE_UNAVAILABLE");
-        const next = { ...current, isAccepting: body.action === "start", measurementStarted: body.action === "start" };
-        transaction.set(prizeReference, next);
-        transaction.set(logReference, { action: body.action === "start" ? "ACCEPT_START" : "ACCEPT_STOP", beforeStock: current.currentStock, afterStock: current.currentStock, note: body.note ?? "", createdAt: new Date() });
-        return next;
+      const stock3 = body.stock3 ?? 0;
+      const stock2 = body.stock2 ?? 0;
+      const stock1 = body.stock1 ?? 0;
+      const total = stock3 + stock2 + stock1;
+      next = {
+        ...current,
+        initialStock: total,
+        currentStock: total,
+        initialStock3: stock3,
+        initialStock2: stock2,
+        initialStock1: stock1,
+        stock3,
+        stock2,
+        stock1,
+        isAccepting: total === 0 ? false : current.isAccepting,
+      };
+      logAction = "STOCK_CHANGE";
+      beforeStock = current.currentStock;
+      afterStock = total;
+    } else if (body.action === "start" || body.action === "stop") {
+      if (body.action === "start" && current.currentStock === 0) {
+        return NextResponse.json({ error: "景品数0または受付終了中です。" }, { status: 400 });
       }
-      if (body.action === "manual_redeem") {
-        const stockField = current.stock3 > 0 ? "stock3" : current.stock2 > 0 ? "stock2" : "stock1";
-        if (!current.isAccepting || current.currentStock <= 0 || current[stockField] <= 0) throw new Error("PRIZE_UNAVAILABLE");
-        const next = { ...current, currentStock: current.currentStock - 1, distributed: current.distributed + 1, [stockField]: current[stockField] - 1, isAccepting: current.currentStock - 1 === 0 ? false : current.isAccepting };
-        transaction.set(prizeReference, next);
-        transaction.set(logReference, { action: "MANUAL_REDEEM", beforeStock: current.currentStock, afterStock: next.currentStock, note: body.note ?? "", createdAt: new Date() });
-        return next;
+      next = {
+        ...current,
+        isAccepting: body.action === "start",
+        measurementStarted: body.action === "start",
+      };
+      logAction = body.action === "start" ? "ACCEPT_START" : "ACCEPT_STOP";
+      beforeStock = current.currentStock;
+      afterStock = current.currentStock;
+    } else if (body.action === "manual_redeem") {
+      const stockField = current.stock3 > 0 ? "stock3" : current.stock2 > 0 ? "stock2" : "stock1";
+      if (!current.isAccepting || current.currentStock <= 0 || current[stockField] <= 0) {
+        return NextResponse.json({ error: "景品数0または受付終了中です。" }, { status: 400 });
       }
-      throw new Error("INVALID_ACTION");
-    });
-    return NextResponse.json(result);
+      const nextStock = current.currentStock - 1;
+      next = {
+        ...current,
+        currentStock: nextStock,
+        distributed: current.distributed + 1,
+        [stockField]: current[stockField] - 1,
+        isAccepting: nextStock === 0 ? false : current.isAccepting,
+      };
+      logAction = "MANUAL_REDEEM";
+      beforeStock = current.currentStock;
+      afterStock = nextStock;
+    } else {
+      return NextResponse.json({ error: "無効な操作です。" }, { status: 400 });
+    }
+
+    // トランザクションのオーバーヘッドを避け、直接ドキュメントを更新
+    await Promise.all([
+      prizeReference.set(next),
+      logReference.set({
+        action: logAction,
+        beforeStock,
+        afterStock,
+        note: body.note ?? "",
+        createdAt: new Date(),
+      }),
+    ]);
+
+    return NextResponse.json(next);
   } catch (error) {
     console.error("Update /api/staff/prize error:", error);
-    let message = "操作に失敗しました。";
-    if (error instanceof Error) {
-      if (error.message === "PRIZE_UNAVAILABLE") message = "景品数0または受付終了中です。";
-      else if (error.message === "INVALID_STOCK") message = "景品数は0以上の整数で入力してください。";
-      else message = error.message;
-    }
-    return NextResponse.json({ error: message }, { status: 400 });
+    const message = error instanceof Error ? error.message : "操作処理中にエラーが発生しました。";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   return handleUpdate(request);
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handleUpdate(request);
 }

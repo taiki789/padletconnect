@@ -9,10 +9,10 @@ type Log = { id: string; action: string; beforeStock: number | null; afterStock:
 const actionLabels: Record<string, string> = { STOCK_CHANGE: "在庫数変更", ACCEPT_START: "計測開始", ACCEPT_STOP: "受付停止", REDEEM: "景品配布（参加者画面）", MANUAL_REDEEM: "景品配布（管理画面）" };
 const EMPTY_PRIZE: Prize = { initialStock: 0, currentStock: 0, distributed: 0, isAccepting: false, measurementStarted: false, initialStock3: 0, initialStock2: 0, initialStock1: 0, stock3: 0, stock2: 0, stock1: 0 };
 
-async function readJson<T>(response: Response): Promise<T | null> {
+async function readJson<T>(response: Response): Promise<{ data: T | null; raw: string }> {
   const text = await response.text();
-  if (!text.trim()) return null;
-  try { return JSON.parse(text) as T; } catch { return null; }
+  if (!text.trim()) return { data: null, raw: "" };
+  try { return { data: JSON.parse(text) as T, raw: text }; } catch { return { data: null, raw: text }; }
 }
 
 export default function StaffDashboard() {
@@ -31,7 +31,7 @@ export default function StaffDashboard() {
     setLoading(true);
     const [prizeResponse, logsResponse] = await Promise.all([fetch("/api/staff/prize"), fetch("/api/staff/logs")]);
     if (prizeResponse.ok) {
-      const nextPrize = await readJson<Prize>(prizeResponse);
+      const { data: nextPrize } = await readJson<Prize>(prizeResponse);
       if (nextPrize) {
         setPrize(nextPrize);
         setStocks({ stock3: String(nextPrize.stock3), stock2: String(nextPrize.stock2), stock1: String(nextPrize.stock1) });
@@ -39,10 +39,13 @@ export default function StaffDashboard() {
       } else setError("景品情報の応答を読み取れませんでした。再度最新化してください。");
     } else {
       setPrize(EMPTY_PRIZE);
-      const errRes = await readJson<{ error?: string }>(prizeResponse);
-      setError(errRes?.error ?? `景品情報の取得に失敗しました（HTTP ${prizeResponse.status}）。`);
+      const { data: errRes, raw } = await readJson<{ error?: string }>(prizeResponse);
+      setError(errRes?.error || raw.slice(0, 100) || `景品情報の取得に失敗しました（HTTP ${prizeResponse.status}）。`);
     }
-    if (logsResponse.ok) setLogs((await readJson<Log[]>(logsResponse)) ?? []);
+    if (logsResponse.ok) {
+      const { data: logData } = await readJson<Log[]>(logsResponse);
+      setLogs(logData ?? []);
+    }
     setLoading(false);
   };
 
@@ -55,9 +58,9 @@ export default function StaffDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      const result = await readJson<{ authenticated?: boolean; error?: string }>(response);
+      const { data: result, raw } = await readJson<{ authenticated?: boolean; error?: string }>(response);
       if (!response.ok || !result?.authenticated) {
-        setError(result?.error ?? `ログインに失敗しました（HTTP ${response.status}）。パスワードをご確認ください。`);
+        setError(result?.error || raw.slice(0, 100) || `ログインに失敗しました（HTTP ${response.status}）。パスワードをご確認ください。`);
         setLoading(false);
         return;
       }
@@ -73,17 +76,36 @@ export default function StaffDashboard() {
 
   const update = async (action: string) => {
     setLoading(true);
-    const body = action === "stock" ? { action, stock3: Number(stocks.stock3), stock2: Number(stocks.stock2), stock1: Number(stocks.stock1), note } : { action, note };
-    const response = await fetch("/api/staff/prize", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const result = await readJson<Prize & { error?: string }>(response);
-    setLoading(false);
-    if (!response.ok) { setError(result?.error ?? `操作に失敗しました（HTTP ${response.status}）。`); return; }
-    if (!result) { setError("サーバーから空の応答が返りました。DB接続とサーバーログを確認してください。"); return; }
-    setError(""); setConfirming(false); await refresh();
+    setError("");
+    try {
+      const body = action === "stock" ? { action, stock3: Number(stocks.stock3), stock2: Number(stocks.stock2), stock1: Number(stocks.stock1), note } : { action, note };
+      const response = await fetch("/api/staff/prize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const { data: result, raw } = await readJson<Prize & { error?: string }>(response);
+      setLoading(false);
+      if (!response.ok) {
+        setError(result?.error || raw.slice(0, 100) || `操作に失敗しました（HTTP ${response.status}）。`);
+        return;
+      }
+      if (!result) {
+        setError("サーバーから空の応答が返りました。");
+        return;
+      }
+      setError("");
+      setConfirming(false);
+      await refresh();
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "通信エラーが発生しました。");
+    }
   };
 
   const requestStockChange = () => {
     if (![stocks.stock3, stocks.stock2, stocks.stock1].every((value) => /^[0-9]+$/.test(value))) { setError("景品数は0以上の整数で入力してください。"); return; }
+    setError("");
     setConfirming(true);
   };
 
