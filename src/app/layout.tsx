@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "まちかね祭 謎解き探検",
+  title: "まちかね祭への入り口",
   description: "まちかね祭の来場者向け謎解き企画",
 };
 
