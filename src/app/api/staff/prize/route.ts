@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
 
 const prizePath = "prize/config";
 const emptyPrize = { initialStock: 0, currentStock: 0, distributed: 0, isAccepting: false, measurementStarted: false, initialStock3: 0, initialStock2: 0, initialStock1: 0, stock3: 0, stock2: 0, stock1: 0 };
 
 async function getPrize() {
+  const app = getAdminApp();
+  if (app.options.projectId === "placeholder-build") {
+    throw new Error("Firebaseが初期化されていません。環境変数 FIREBASE_SERVICE_ACCOUNT_KEY を設定してください。");
+  }
   const db = getAdminFirestore();
   const reference = db.doc(prizePath);
   const snapshot = await reference.get();
@@ -14,18 +18,35 @@ async function getPrize() {
 }
 
 export async function GET() {
-  if (!await isAdminAuthenticated()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(await getPrize());
+  try {
+    if (!await isAdminAuthenticated()) {
+      return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
+    }
+    const data = await getPrize();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("GET /api/staff/prize error:", error);
+    const message = error instanceof Error ? error.message : "景品情報の取得に失敗しました。";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request) {
-  if (!await isAdminAuthenticated()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const body = await request.json() as { action?: string; stock3?: number; stock2?: number; stock1?: number; note?: string };
-  const db = getAdminFirestore();
-  const prizeReference = db.doc(prizePath);
-  const logReference = db.collection("prizeLogs").doc();
-
   try {
+    if (!await isAdminAuthenticated()) {
+      return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
+    }
+
+    const app = getAdminApp();
+    if (app.options.projectId === "placeholder-build") {
+      throw new Error("Firebaseが初期化されていません。環境変数 FIREBASE_SERVICE_ACCOUNT_KEY を設定してください。");
+    }
+
+    const body = await request.json() as { action?: string; stock3?: number; stock2?: number; stock1?: number; note?: string };
+    const db = getAdminFirestore();
+    const prizeReference = db.doc(prizePath);
+    const logReference = db.collection("prizeLogs").doc();
+
     const result = await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(prizeReference);
       const current = { ...emptyPrize, ...(snapshot.exists ? snapshot.data() : {}) } as typeof emptyPrize;
@@ -60,7 +81,13 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error && error.message === "PRIZE_UNAVAILABLE" ? "景品数0または受付終了中です。" : error instanceof Error && error.message === "INVALID_STOCK" ? "景品数は0以上の整数で入力してください。" : "景品情報の保存に失敗しました。Firebase設定とFirestoreルールを確認してください。";
+    console.error("PATCH /api/staff/prize error:", error);
+    let message = "操作に失敗しました。";
+    if (error instanceof Error) {
+      if (error.message === "PRIZE_UNAVAILABLE") message = "景品数0または受付終了中です。";
+      else if (error.message === "INVALID_STOCK") message = "景品数は0以上の整数で入力してください。";
+      else message = error.message;
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

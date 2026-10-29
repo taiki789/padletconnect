@@ -5,6 +5,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Firestore } from "firebase-admin/firestore";
 
 let adminApp: App | undefined;
+let initError: string | null = null;
 
 export function getAdminApp(): App {
   if (getApps().length > 0) {
@@ -23,16 +24,33 @@ export function getAdminApp(): App {
       ) {
         raw = raw.slice(1, -1);
       }
-      const serviceAccount = JSON.parse(raw);
+
+      let serviceAccount: { private_key?: string; project_id?: string; client_email?: string };
+      try {
+        serviceAccount = JSON.parse(raw);
+      } catch (jsonErr) {
+        // Base64 エンコードされている場合の復号
+        try {
+          const decoded = Buffer.from(raw, "base64").toString("utf-8");
+          serviceAccount = JSON.parse(decoded);
+        } catch {
+          throw new Error(`FIREBASE_SERVICE_ACCOUNT_KEY の JSON パースに失敗しました（文字数: ${raw.length}）。形式をご確認ください。`);
+        }
+      }
+
       if (serviceAccount.private_key) {
+        // 改行コードのエスケープ解除
         serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
       }
+
       adminApp = initializeApp({
-        credential: cert(serviceAccount),
+        credential: cert(serviceAccount as any),
       });
+      initError = null;
       return adminApp;
     } catch (e) {
-      console.error("FIREBASE_SERVICE_ACCOUNT_KEY の読み込み/初期化に失敗:", e);
+      initError = e instanceof Error ? e.message : String(e);
+      console.error("FIREBASE_SERVICE_ACCOUNT_KEY 初期化エラー:", initError);
     }
   }
 
@@ -52,6 +70,7 @@ export function getAdminApp(): App {
         adminApp = initializeApp({
           credential: cert(serviceAccount),
         });
+        initError = null;
         return adminApp;
       }
     } catch (e) {
@@ -69,6 +88,7 @@ export function getAdminApp(): App {
       adminApp = initializeApp({
         credential: cert({ projectId, clientEmail, privateKey }),
       });
+      initError = null;
       return adminApp;
     } catch (e) {
       console.error("個別環境変数での Firebase 初期化に失敗:", e);
@@ -84,7 +104,15 @@ export function getAdminApp(): App {
 }
 
 export function getAdminFirestore(): Firestore {
-  return getFirestore(getAdminApp());
+  const app = getAdminApp();
+  if (app.options.projectId === "placeholder-build") {
+    throw new Error(
+      initError
+        ? `Firebase初期化失敗: ${initError}`
+        : "Firebase設定（FIREBASE_SERVICE_ACCOUNT_KEY）が未設定または読み込めませんでした。Vercelの環境変数をご確認ください。"
+    );
+  }
+  return getFirestore(app);
 }
 
 export async function createStaffCustomToken(): Promise<string | null> {

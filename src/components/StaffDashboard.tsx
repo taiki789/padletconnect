@@ -35,10 +35,12 @@ export default function StaffDashboard() {
       if (nextPrize) {
         setPrize(nextPrize);
         setStocks({ stock3: String(nextPrize.stock3), stock2: String(nextPrize.stock2), stock1: String(nextPrize.stock1) });
+        setError("");
       } else setError("景品情報の応答を読み取れませんでした。再度最新化してください。");
     } else {
       setPrize(EMPTY_PRIZE);
-      setError("景品情報の取得に失敗しました。Firebase設定（FIREBASE_SERVICE_ACCOUNT_KEY）をご確認ください。");
+      const errRes = await readJson<{ error?: string }>(prizeResponse);
+      setError(errRes?.error ?? `景品情報の取得に失敗しました（HTTP ${prizeResponse.status}）。`);
     }
     if (logsResponse.ok) setLogs((await readJson<Log[]>(logsResponse)) ?? []);
     setLoading(false);
