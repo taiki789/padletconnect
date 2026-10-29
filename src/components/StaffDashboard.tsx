@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithCustomToken } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase-client";
 
 type Prize = { initialStock: number; currentStock: number; distributed: number; isAccepting: boolean; measurementStarted: boolean; initialStock3: number; initialStock2: number; initialStock1: number; stock3: number; stock2: number; stock1: number };
 type Log = { id: string; action: string; beforeStock: number | null; afterStock: number | null; note?: string | null; createdAt: string };
@@ -55,18 +53,11 @@ export default function StaffDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      const result = await readJson<{ firebaseToken?: string | null; authenticated?: boolean; error?: string }>(response);
+      const result = await readJson<{ authenticated?: boolean; error?: string }>(response);
       if (!response.ok || !result?.authenticated) {
         setError(result?.error ?? `ログインに失敗しました（HTTP ${response.status}）。パスワードをご確認ください。`);
         setLoading(false);
         return;
-      }
-      if (result.firebaseToken) {
-        try {
-          await signInWithCustomToken(firebaseAuth, result.firebaseToken);
-        } catch (authError) {
-          console.warn("Client Firebase Auth sign-in skipped:", authError);
-        }
       }
       setAuthenticated(true);
       setError("");

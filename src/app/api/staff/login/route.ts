@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminToken, adminCookieName } from "@/lib/auth";
-import { createStaffCustomToken } from "@/lib/firebase-admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,15 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "パスワードが正しくありません。" }, { status: 401 });
     }
 
-    // Firebase Auth トークンの生成を試みるが、失敗しても管理者Cookieでログインを継続
-    let firebaseToken: string | undefined;
-    try {
-      firebaseToken = await createStaffCustomToken();
-    } catch (authError) {
-      console.warn("createStaffCustomToken failed (proceeding with session cookie):", authError);
-    }
-
-    const response = NextResponse.json({ authenticated: true, firebaseToken: firebaseToken || null });
+    const response = NextResponse.json({ authenticated: true });
     response.cookies.set(adminCookieName, createAdminToken(), {
       httpOnly: true,
       sameSite: "strict",
