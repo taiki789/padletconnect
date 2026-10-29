@@ -11,6 +11,13 @@ export const instant = false;
 
 export default async function StaffPage({ params }: { params: Promise<{ secret: string }> }) {
   const { secret } = await params;
-  if (!process.env.ADMIN_SECRET_PATH || secret !== process.env.ADMIN_SECRET_PATH) notFound();
+
+  // 環境変数が設定されていない場合でも "staff" でアクセスできるようにフォールバックを設定
+  const validSecret = process.env.ADMIN_SECRET_PATH || "staff";
+
+  if (secret !== validSecret) {
+    notFound();
+  }
+
   return <StaffDashboard />;
 }
