@@ -7,7 +7,13 @@ export async function GET(_request: NextRequest) {
     const app = getAdminApp();
 
     if (app.options.projectId === "placeholder-build") {
-      return NextResponse.json({ currentStock: 0, isAccepting: false });
+      return NextResponse.json({
+        currentStock: 0,
+        isAccepting: false,
+        stock3: 0,
+        stock2: 0,
+        stock1: 0,
+      });
     }
 
     const db = getAdminFirestore();
@@ -17,11 +23,21 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({
       currentStock: prize?.currentStock ?? 0,
       isAccepting: prize?.isAccepting ?? false,
+      stock3: prize?.stock3 ?? 0,
+      stock2: prize?.stock2 ?? 0,
+      stock1: prize?.stock1 ?? 0,
     });
   } catch (error) {
     console.error("Failed to fetch prize config:", error);
     return NextResponse.json(
-      { currentStock: 0, isAccepting: false, error: "Internal Server Error" },
+      {
+        currentStock: 0,
+        isAccepting: false,
+        stock3: 0,
+        stock2: 0,
+        stock1: 0,
+        error: "Internal Server Error",
+      },
       { status: 500 }
     );
   }
