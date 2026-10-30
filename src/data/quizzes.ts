@@ -50,3 +50,9 @@ export const PADLET_URL =
   "https://padlet.com/tyuujitu/padlet-s023yz9svk0h9sbxq0vq";
 
 export const CAMPUS_MAP_HIGHLIGHT_PATH = "/campus-map-highlight.jpg";
+
+export const EXCHANGE_MAP_EMBED_URL =
+  "https://maps.google.com/maps?q=%E5%A4%A7%E9%98%AA%E5%A4%A7%E5%AD%A6%20%E5%A4%9A%E7%9B%AE%E7%9A%84%E5%80%89%E5%BA%AB&ll=34.8068938,135.4556937&z=18&hl=ja&output=embed";
+
+export const EXCHANGE_MAP_URL =
+  "https://www.google.co.jp/maps/place/%E5%A4%A7%E9%98%AA%E5%A4%A7%E5%AD%A6+%E5%A4%9A%E7%9B%AE%E7%9A%84%E5%80%89%E5%BA%AB/@34.8068982,135.4531188,17z/data=!3m1!4b1!4m6!3m5!1s0x6000fbbf3c4ccb89:0x7f8220e6faddec21!8m2!3d34.8068938!4d135.4556937!16s%2Fg%2F11j6f1j11k?entry=ttu";
