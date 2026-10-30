@@ -72,7 +72,6 @@ export default function Home() {
   const [checkingPrize, setCheckingPrize] = useState(false);
   const [padletOpened, setPadletOpened] = useState(false);
   const [missionFailedModal, setMissionFailedModal] = useState(false);
-  const [isSimpleMission2, setIsSimpleMission2] = useState(false);
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -108,7 +107,6 @@ export default function Home() {
     let stock3 = 50;
     let stock2 = 50;
     let stock1 = 50;
-    let simpleM2 = false;
     try {
       const prizeResponse = await fetch("/api/prize/status", { cache: "no-store" });
       if (prizeResponse.ok) {
@@ -118,7 +116,6 @@ export default function Home() {
           stock3?: number;
           stock2?: number;
           stock1?: number;
-          isSimpleMission2?: boolean;
         };
         if (prizeStatus.currentStock <= 0 || !prizeStatus.isAccepting) {
           setState({ ...INITIAL_STATE, screen: "soldout" });
@@ -127,7 +124,6 @@ export default function Home() {
         stock3 = prizeStatus.stock3 ?? 50;
         stock2 = prizeStatus.stock2 ?? 50;
         stock1 = prizeStatus.stock1 ?? 50;
-        simpleM2 = Boolean(prizeStatus.isSimpleMission2);
       }
     } catch {
       // Continue only when the status service is unavailable; the server checks again at redemption.
@@ -141,7 +137,6 @@ export default function Home() {
     setSelected(null);
     setPadletOpened(false);
     setMissionFailedModal(false);
-    setIsSimpleMission2(simpleM2);
     setState({
       ...INITIAL_STATE,
       quizIds,
@@ -211,47 +206,7 @@ export default function Home() {
         participationId: state.participationId,
         score: state.score,
       }),
-    })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const data = (await res.json()) as { isSimpleMission2?: boolean };
-        if (typeof data.isSimpleMission2 === "boolean") {
-          setIsSimpleMission2(data.isSimpleMission2);
-        }
-      })
-      .catch(() => {});
-  };
-
-  const completeSimpleMission2 = async () => {
-    window.open(PADLET_URL, "_blank", "noopener,noreferrer");
-    let currentId = state.participationId;
-    if (!currentId) {
-      try {
-        const response = await fetch("/api/participation", { method: "POST" });
-        if (response.ok) {
-          const result = (await response.json()) as { participationId: string };
-          currentId = result.participationId;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    void fetch("/api/participation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "mission2_complete",
-        participationId: currentId,
-        score: state.score,
-      }),
     }).catch(() => {});
-
-    setState((current) => ({
-      ...current,
-      participationId: currentId ?? current.participationId,
-      screenshotVerified: true,
-      screen: "final",
-    }));
   };
 
   const reset = () => {
@@ -518,62 +473,35 @@ export default function Home() {
       {state.screen === "mission2" && (
         <section className="content-section">
           <Label>MISSION 02</Label>
-          {isSimpleMission2 ? (
-            <>
-              <h2>
-                Padletを、
-                <br />
-                開いてみよう。
-              </h2>
-              <p>
-                下のボタンを押して、まちかね祭の掲示板（Padlet）を開いてみよう！みんなの感想やおすすめ企画が見られます。
-              </p>
-              <ul className="idea-list">
-                <li>まちかね祭で楽しかったこと</li>
-                <li>おもしろかった展示や企画</li>
-                <li>参加した団体へのメッセージ</li>
-                <li>これから来る人へのおすすめ</li>
-              </ul>
-              <ActionButton onClick={completeSimpleMission2}>
-                Padletを開く ↗（ミッション達成へ）
-              </ActionButton>
-              <p className="notice">
-                ※ボタンを押してPadletを開くとミッション達成となり、<strong>必ず景品がもらえます！</strong>
-              </p>
-            </>
-          ) : (
-            <>
-              <h2>
-                ひとこと、
-                <br />
-                残していこう。
-              </h2>
-              <p>
-                Padletに、まちかね祭の感想やメッセージを投稿してください。投稿を完了すると<strong>必ず景品がもらえます！</strong>
-              </p>
-              <ul className="idea-list">
-                <li>まちかね祭で楽しかったこと</li>
-                <li>おもしろかった展示や企画</li>
-                <li>参加した団体へのメッセージ</li>
-                <li>これから来る人へのおすすめ</li>
-              </ul>
-              <a
-                className="action-button link-button"
-                href={PADLET_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setPadletOpened(true)}
-              >
-                Padletを開く ↗
-              </a>
-              <p className="notice">
-                投稿した画面のスクリーンショットを撮って、この画面に戻ってきてください。
-              </p>
-              <ActionButton onClick={() => setScreen("upload")} secondary>
-                スクショ提出へ進む →
-              </ActionButton>
-            </>
-          )}
+          <h2>
+            ひとこと、
+            <br />
+            残していこう。
+          </h2>
+          <p>
+            Padletに、まちかね祭の感想やメッセージを投稿してください。投稿を完了すると<strong>必ず景品がもらえます！</strong>
+          </p>
+          <ul className="idea-list">
+            <li>まちかね祭で楽しかったこと</li>
+            <li>おもしろかった展示や企画</li>
+            <li>参加した団体へのメッセージ</li>
+            <li>これから来る人へのおすすめ</li>
+          </ul>
+          <a
+            className="action-button link-button"
+            href={PADLET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setPadletOpened(true)}
+          >
+            Padletを開く ↗
+          </a>
+          <p className="notice">
+            投稿した画面のスクリーンショットを撮って、この画面に戻ってきてください。
+          </p>
+          <ActionButton onClick={() => setScreen("upload")} secondary>
+            スクショ提出へ進む →
+          </ActionButton>
         </section>
       )}
       {state.screen === "upload" && (
