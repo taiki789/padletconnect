@@ -70,7 +70,7 @@ export default function Home() {
   const [redeemed, setRedeemed] = useState(false);
   const [prizeAvailable, setPrizeAvailable] = useState(true);
   const [checkingPrize, setCheckingPrize] = useState(false);
-  const [uploadEnteredAt, setUploadEnteredAt] = useState<number>(0);
+  const [padletOpened, setPadletOpened] = useState(false);
   const [missionFailedModal, setMissionFailedModal] = useState(false);
   const [isSimpleMission2, setIsSimpleMission2] = useState(false);
 
@@ -100,9 +100,6 @@ export default function Home() {
 
   const setScreen = (screen: Screen) => {
     setError("");
-    if (screen === "upload") {
-      setUploadEnteredAt(Date.now());
-    }
     setState((current) => ({ ...current, screen }));
   };
 
@@ -142,6 +139,7 @@ export default function Home() {
     setStaffCode("");
     setError("");
     setSelected(null);
+    setPadletOpened(false);
     setMissionFailedModal(false);
     setIsSimpleMission2(simpleM2);
     setState({
@@ -170,6 +168,7 @@ export default function Home() {
     setStaffCode("");
     setError("");
     setSelected(null);
+    setPadletOpened(false);
     setMissionFailedModal(false);
     setState(INITIAL_STATE);
   };
@@ -264,9 +263,8 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (uploadEnteredAt > 0 && Date.now() - uploadEnteredAt < 5000) {
+    if (!padletOpened) {
       event.target.value = "";
-      setUploadEnteredAt(Date.now());
       setMissionFailedModal(true);
       return;
     }
@@ -564,6 +562,7 @@ export default function Home() {
                 href={PADLET_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => setPadletOpened(true)}
               >
                 Padletを開く ↗
               </a>
@@ -600,10 +599,10 @@ export default function Home() {
           {error && <p className="error-message">{error}</p>}
           <p className="notice">対応形式：JPEG / PNG / WebP　最大10MB</p>
           <ActionButton
-            onClick={() => window.open(PADLET_URL, "_blank", "noopener,noreferrer")}
+            onClick={() => setScreen("mission2")}
             secondary
           >
-            Padletに戻る ↗
+            ← 前のページへ戻る（Padletへ投稿する）
           </ActionButton>
         </section>
       )}
@@ -681,19 +680,29 @@ export default function Home() {
             <h2>Mission失敗</h2>
             <p>
               <strong>
-                Mission失敗、再度padletに投稿を行い、スクショを提出してください
+                投稿画面ではない可能性があります。再度padletに投稿しスクショを提出してください
               </strong>
               <br />
               <small>※最後までクリアすると、必ず景品がもらえます！</small>
             </p>
-            <ActionButton
+            <button
+              style={{
+                width: "100%",
+                minHeight: "54px",
+                marginTop: "16px",
+                border: "2px solid var(--ink)",
+                background: "var(--yellow)",
+                color: "var(--ink)",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
               onClick={() => {
                 setMissionFailedModal(false);
                 setScreen("mission2");
               }}
             >
-              padletへの投稿へ戻る
-            </ActionButton>
+              ← 前のページへ戻る（padletへの投稿へ戻る）
+            </button>
           </div>
         </div>
       )}
