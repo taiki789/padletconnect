@@ -95,6 +95,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    if (body.action === "mission2_complete") {
+      const prizeRef = db.doc("prize/config");
+      const prizeSnap = await prizeRef.get();
+      const prize = prizeSnap.data() ?? {};
+      const prevCompleted = Number(prize.mission2Completed ?? 0);
+      const prevStepFinal = Number(prize.stepFinal ?? prevCompleted);
+
+      const tasks: Promise<unknown>[] = [
+        prizeRef.update({
+          mission2Completed: prevCompleted + 1,
+          stepFinal: prevStepFinal + 1,
+        }),
+      ];
+
+      if (body.participationId) {
+        tasks.push(
+          db.collection("participations").doc(body.participationId).update({
+            screenshotVerified: true,
+            score: typeof body.score === "number" ? body.score : 0,
+          })
+        );
+      }
+
+      await Promise.all(tasks);
+      return NextResponse.json({ ok: true });
+    }
+
     // 通常の参加記録作成（スタート時）
     const reference = db.collection("participations").doc();
     const prizeRef = db.doc("prize/config");

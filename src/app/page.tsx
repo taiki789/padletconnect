@@ -75,7 +75,40 @@ export default function Home() {
   const [trackedScreens, setTrackedScreens] = useState<string[]>([]);
 
   useEffect(() => {
+    const mapReturnAt = Number(
+      window.localStorage.getItem("machikanefes-map-return") || 0
+    );
+    const shouldRestoreComplete =
+      window.location.hash === "#complete" ||
+      (mapReturnAt > 0 && Date.now() - mapReturnAt < 30 * 60 * 1000);
+
+    if (shouldRestoreComplete) {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Partial<SavedState> & {
+            redeemed?: boolean;
+          };
+          startTransition(() => {
+            setState({
+              ...INITIAL_STATE,
+              ...parsed,
+              quizIds: Array.isArray(parsed.quizIds) ? parsed.quizIds : [],
+              answers: Array.isArray(parsed.answers) ? parsed.answers : [],
+              screen: "final",
+            });
+            if (parsed.redeemed) {
+              setRedeemed(true);
+            }
+          });
+          return;
+        } catch {
+          // ignore parse error
+        }
+      }
+    }
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem("machikanefes-map-return");
   }, []);
 
   // MISSION 02 または upload 画面で別タブ/アプリ（Padlet）へ遷移したことを検出する
@@ -94,6 +127,11 @@ export default function Home() {
 
   useEffect(() => {
     if (state.screen !== "final") return;
+    window.history.replaceState(null, "", "#complete");
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...state, redeemed })
+    );
     fetch("/api/prize/status")
       .then((response) => response.json())
       .then((result: { currentStock: number; isAccepting: boolean }) => {
@@ -102,7 +140,7 @@ export default function Home() {
         );
       })
       .catch(() => setPrizeAvailable(true));
-  }, [state.screen]);
+  }, [state, redeemed]);
 
   const activeQuizzes = state.quizIds.length
     ? state.quizIds
@@ -157,6 +195,11 @@ export default function Home() {
       setCheckingPrize(false);
     }
     const quizIds = selectQuizIdsByStock(stock3, stock2, stock1);
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem("machikanefes-map-return");
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     setRedeemed(false);
     setStaffCode("");
     setError("");
@@ -186,6 +229,10 @@ export default function Home() {
 
   const returnHome = () => {
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem("machikanefes-map-return");
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     setRedeemed(false);
     setStaffCode("");
     setError("");
@@ -243,7 +290,7 @@ export default function Home() {
       returnHome();
   };
 
-  const submitScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
+  const submitScreenshot = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -253,51 +300,60 @@ export default function Home() {
       return;
     }
 
+    const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (!allowedTypes.has(file.type)) {
+      event.target.value = "";
+      setError("JPEG、PNG、WebP形式の画像を選択してください。");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      event.target.value = "";
+      setError("画像サイズは10MB以下にしてください。");
+      return;
+    }
+
     setError("");
-    setSubmitting(true);
+    setSubmitting(false);
 
-    let currentId = state.participationId;
-
-    // participationId が未取得の場合はここで作成を試みる
-    if (!currentId) {
-      try {
-        const response = await fetch("/api/participation", { method: "POST" });
-        if (response.ok) {
-          const result = (await response.json()) as { participationId: string };
-          currentId = result.participationId;
-        }
-      } catch (err) {
-        console.error("Failed to create participation:", err);
-      }
-    }
-
-    // スクショ検証APIを呼び出してFirestore側のフラグとスコアを更新
-    try {
-      const formData = new FormData();
-      formData.append("screenshot", file);
-      if (currentId) {
-        formData.append("participationId", currentId);
-      }
-      formData.append("score", String(state.score));
-      const res = await fetch("/api/screenshot", { method: "POST", body: formData });
-      if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(errData.error ?? "画像の確認に失敗しました。もう一度お試しください。");
-        setSubmitting(false);
-        return;
-      }
-    } catch (uploadErr) {
-      console.error("Screenshot upload api error:", uploadErr);
-    }
-
-    setState((current) => ({
-      ...current,
-      participationId: currentId ?? current.participationId,
+    // クライアント側で画像形式・サイズを即座に検証し、待ち時間0秒で最終画面へ遷移する
+    const nextState: SavedState = {
+      ...state,
       screenshotVerified: true,
       screen: "final",
-    }));
+    };
+    setState(nextState);
+    window.history.replaceState(null, "", "#complete");
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...nextState, redeemed })
+    );
 
-    setSubmitting(false);
+    // 重い画像ファイル本体は送信せず、軽量なJSONでバックグラウンド記録する
+    void (async () => {
+      let currentId = state.participationId;
+      if (!currentId) {
+        try {
+          const response = await fetch("/api/participation", { method: "POST" });
+          if (response.ok) {
+            const result = (await response.json()) as { participationId: string };
+            currentId = result.participationId;
+            setState((current) => ({ ...current, participationId: currentId }));
+          }
+        } catch {
+          // ignore
+        }
+      }
+      await fetch("/api/participation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mission2_complete",
+          participationId: currentId,
+          score: state.score,
+        }),
+      }).catch(() => {});
+    })();
   };
 
   const redeemPrize = async () => {
@@ -621,6 +677,17 @@ export default function Home() {
             href={EXCHANGE_MAP_URL}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => {
+              window.history.replaceState(null, "", "#complete");
+              window.localStorage.setItem(
+                "machikanefes-map-return",
+                String(Date.now())
+              );
+              window.localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({ ...state, screen: "final", redeemed })
+              );
+            }}
           >
             Googleマップで場所・ルートを見る ↗
           </a>
