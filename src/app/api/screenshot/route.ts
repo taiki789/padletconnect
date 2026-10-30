@@ -52,9 +52,12 @@ export async function POST(request: NextRequest) {
       if (!alreadyVerified) {
         const prizeRef = db.doc("prize/config");
         const prizeSnap = await prizeRef.get();
-        const prevCompleted = Number(prizeSnap.data()?.mission2Completed ?? 0);
+        const prizeData = prizeSnap.data() ?? {};
+        const prevCompleted = Number(prizeData.mission2Completed ?? 0);
+        const prevStepFinal = Number(prizeData.stepFinal ?? prevCompleted);
         await prizeRef.update({
           mission2Completed: prevCompleted + 1,
+          stepFinal: prevStepFinal + 1,
         });
       }
     } catch (dbError) {

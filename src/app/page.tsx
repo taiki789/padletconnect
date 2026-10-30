@@ -72,6 +72,7 @@ export default function Home() {
   const [checkingPrize, setCheckingPrize] = useState(false);
   const [padletOpened, setPadletOpened] = useState(false);
   const [missionFailedModal, setMissionFailedModal] = useState(false);
+  const [trackedScreens, setTrackedScreens] = useState<string[]>([]);
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -100,6 +101,17 @@ export default function Home() {
   const setScreen = (screen: Screen) => {
     setError("");
     setState((current) => ({ ...current, screen }));
+    if (
+      ["quiz", "result", "mission2", "upload"].includes(screen) &&
+      !trackedScreens.includes(screen)
+    ) {
+      setTrackedScreens((prev) => [...prev, screen]);
+      void fetch("/api/participation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "track_screen", screen }),
+      }).catch(() => {});
+    }
   };
 
   const start = async () => {
@@ -137,6 +149,7 @@ export default function Home() {
     setSelected(null);
     setPadletOpened(false);
     setMissionFailedModal(false);
+    setTrackedScreens(["mission1"]);
     setState({
       ...INITIAL_STATE,
       quizIds,
@@ -165,6 +178,7 @@ export default function Home() {
     setSelected(null);
     setPadletOpened(false);
     setMissionFailedModal(false);
+    setTrackedScreens(["mission1"]);
     setState(INITIAL_STATE);
   };
 
@@ -175,6 +189,16 @@ export default function Home() {
 
   const confirmAnswer = () => {
     if (selected === null) return;
+    const isCorrect = selected === question.answer;
+    void fetch("/api/participation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "track_answer",
+        quizId: question.id,
+        correct: isCorrect,
+      }),
+    }).catch(() => {});
     const answers = [...state.answers];
     answers[state.questionIndex] = selected;
     setState((current) => ({
@@ -198,15 +222,6 @@ export default function Home() {
 
   const goToMission2 = () => {
     setScreen("mission2");
-    void fetch("/api/participation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "mission2_reach",
-        participationId: state.participationId,
-        score: state.score,
-      }),
-    }).catch(() => {});
   };
 
   const reset = () => {

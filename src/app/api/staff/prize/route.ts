@@ -17,6 +17,13 @@ const emptyPrize = {
   stock1: 0,
   mission2Reached: 0,
   mission2Completed: 0,
+  stepMission1: 0,
+  stepQuiz: 0,
+  stepResult: 0,
+  stepMission2: 0,
+  stepUpload: 0,
+  stepFinal: 0,
+  quizStats: {} as Record<string, { attempts: number; correct: number }>,
 };
 
 async function getPrize() {
@@ -133,6 +140,13 @@ async function handleUpdate(request: NextRequest) {
         ...current,
         mission2Reached: 0,
         mission2Completed: 0,
+        stepMission1: 0,
+        stepQuiz: 0,
+        stepResult: 0,
+        stepMission2: 0,
+        stepUpload: 0,
+        stepFinal: 0,
+        quizStats: {},
       };
       logAction = "MISSION2_RESET";
       beforeStock = current.currentStock;
