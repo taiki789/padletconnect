@@ -45,6 +45,7 @@ export default function Home() {
   const [redeemed, setRedeemed] = useState(false);
   const [prizeAvailable, setPrizeAvailable] = useState(true);
   const [checkingPrize, setCheckingPrize] = useState(false);
+  const [uploadEnteredAt, setUploadEnteredAt] = useState<number>(0);
 
   useEffect(() => {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -62,7 +63,13 @@ export default function Home() {
     : quizzes.slice(0, 3);
   const question = activeQuizzes[state.questionIndex] ?? activeQuizzes[0];
   const rank = ranks[Math.min(state.score, ranks.length - 1)];
-  const setScreen = (screen: Screen) => setState((current) => ({ ...current, screen }));
+  const setScreen = (screen: Screen) => {
+    setError("");
+    if (screen === "upload") {
+      setUploadEnteredAt(Date.now());
+    }
+    setState((current) => ({ ...current, screen }));
+  };
 
   const start = async () => {
     setCheckingPrize(true);
@@ -131,6 +138,13 @@ export default function Home() {
   const submitScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (uploadEnteredAt > 0 && Date.now() - uploadEnteredAt < 5000) {
+      event.target.value = "";
+      setUploadEnteredAt(Date.now());
+      setError("Mission失敗、再度padletに投稿を行い、スクショを提出してください");
+      return;
+    }
 
     setError("");
     setSubmitting(true);
