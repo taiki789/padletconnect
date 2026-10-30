@@ -78,6 +78,20 @@ export default function Home() {
     window.localStorage.removeItem(STORAGE_KEY);
   }, []);
 
+  // MISSION 02 または upload 画面で別タブ/アプリ（Padlet）へ遷移したことを検出する
+  useEffect(() => {
+    if (state.screen !== "mission2" && state.screen !== "upload") return;
+    const handleVisibilityOrBlur = () => {
+      if (document.visibilityState === "hidden") {
+        setPadletOpened(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityOrBlur);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityOrBlur);
+    };
+  }, [state.screen]);
+
   useEffect(() => {
     if (state.screen !== "final") return;
     fetch("/api/prize/status")
@@ -258,16 +272,22 @@ export default function Home() {
     }
 
     // スクショ検証APIを呼び出してFirestore側のフラグとスコアを更新
-    if (currentId) {
-      try {
-        const formData = new FormData();
-        formData.append("screenshot", file);
+    try {
+      const formData = new FormData();
+      formData.append("screenshot", file);
+      if (currentId) {
         formData.append("participationId", currentId);
-        formData.append("score", String(state.score));
-        await fetch("/api/screenshot", { method: "POST", body: formData });
-      } catch (uploadErr) {
-        console.error("Screenshot upload api error:", uploadErr);
       }
+      formData.append("score", String(state.score));
+      const res = await fetch("/api/screenshot", { method: "POST", body: formData });
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(errData.error ?? "画像の確認に失敗しました。もう一度お試しください。");
+        setSubmitting(false);
+        return;
+      }
+    } catch (uploadErr) {
+      console.error("Screenshot upload api error:", uploadErr);
     }
 
     setState((current) => ({
@@ -542,11 +562,20 @@ export default function Home() {
           {error && <p className="error-message">{error}</p>}
           <p className="notice">対応形式：JPEG / PNG / WebP　最大10MB</p>
           <ActionButton
-            onClick={() => setScreen("mission2")}
+            onClick={() => {
+              setPadletOpened(true);
+              window.open(PADLET_URL, "_blank", "noopener,noreferrer");
+            }}
             secondary
           >
-            ← 前のページへ戻る（Padletへ投稿する）
+            Padletを開く ↗
           </ActionButton>
+          <button
+            className="reset-button"
+            onClick={() => setScreen("mission2")}
+          >
+            ← 前のページへ戻る
+          </button>
         </section>
       )}
       {state.screen === "final" && (
@@ -620,7 +649,7 @@ export default function Home() {
       {missionFailedModal && (
         <div className="confirm-overlay">
           <div className="confirm-modal">
-            <h2>Mission失敗</h2>
+            <h2>Ｍission失敗</h2>
             <p>
               <strong>
                 投稿画面ではない可能性があります。再度padletに投稿しスクショを提出してください
