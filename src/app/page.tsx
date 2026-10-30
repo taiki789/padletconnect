@@ -111,6 +111,13 @@ export default function Home() {
     window.localStorage.removeItem("machikanefes-map-return");
   }, []);
 
+  // 画面遷移や問題切り替え時に必ずページの一番上へスクロールする
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [state.screen, state.questionIndex, redeemed]);
+
   // MISSION 02 または upload 画面で別タブ/アプリ（Padlet）へ遷移したことを検出する
   useEffect(() => {
     if (state.screen !== "mission2" && state.screen !== "upload") return;
