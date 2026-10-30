@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { quizzes } from "@/data/quizzes";
 
@@ -102,28 +102,34 @@ export default function StaffDashboard() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string>("");
 
-  const refresh = async () => {
-    setLoading(true);
+  const refresh = useCallback(async (syncInputs = false, silent = false) => {
+    if (!silent) setLoading(true);
+    const ts = Date.now();
     const [prizeResponse, logsResponse] = await Promise.all([
-      fetch("/api/staff/prize"),
-      fetch("/api/staff/logs"),
+      fetch(`/api/staff/prize?t=${ts}`, { cache: "no-store" }),
+      fetch(`/api/staff/logs?t=${ts}`, { cache: "no-store" }),
     ]);
     if (prizeResponse.ok) {
       const { data: nextPrize } = await readJson<Prize>(prizeResponse);
       if (nextPrize) {
         setPrize(nextPrize);
-        setStocks({
-          stock3: String(nextPrize.stock3),
-          stock2: String(nextPrize.stock2),
-          stock1: String(nextPrize.stock1),
-        });
+        if (syncInputs) {
+          setStocks({
+            stock3: String(nextPrize.stock3),
+            stock2: String(nextPrize.stock2),
+            stock1: String(nextPrize.stock1),
+          });
+        }
+        setLastSynced(new Date().toLocaleTimeString("ja-JP"));
         setError("");
-      } else
+      } else if (!silent) {
         setError(
           "景品情報の応答を読み取れませんでした。再度最新化してください。"
         );
-    } else {
+      }
+    } else if (!silent) {
       setPrize(EMPTY_PRIZE);
       const { data: errRes, raw } = await readJson<{ error?: string }>(
         prizeResponse
@@ -138,8 +144,17 @@ export default function StaffDashboard() {
       const { data: logData } = await readJson<Log[]>(logsResponse);
       setLogs(logData ?? []);
     }
-    setLoading(false);
-  };
+    if (!silent) setLoading(false);
+  }, []);
+
+  // ログイン中は3秒ごとにバックグラウンドでリアルタイム（JUST NOW）自動同期する
+  useEffect(() => {
+    if (!authenticated) return;
+    const timer = setInterval(() => {
+      void refresh(false, true);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [authenticated, refresh]);
 
   const login = async () => {
     setLoading(true);
@@ -165,7 +180,7 @@ export default function StaffDashboard() {
       }
       setAuthenticated(true);
       setError("");
-      await refresh();
+      await refresh(true, false);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "通信エラーが発生しました。"
@@ -210,9 +225,17 @@ export default function StaffDashboard() {
         setError("サーバーから空の応答が返りました。");
         return;
       }
+      // POSTレスポンスの最新データで即座に画面を更新（待ち時間ゼロ）
+      setPrize(result);
+      setStocks({
+        stock3: String(result.stock3),
+        stock2: String(result.stock2),
+        stock1: String(result.stock1),
+      });
+      setLastSynced(new Date().toLocaleTimeString("ja-JP"));
       setError("");
       setConfirming(false);
-      await refresh();
+      void refresh(false, true);
     } catch (err) {
       setLoading(false);
       setError(
@@ -322,12 +345,17 @@ export default function StaffDashboard() {
         <section>
           <div className="staff-heading">
             <div>
-              <p className="label">PRIZE CONTROL</p>
+              <p className="label">
+                PRIZE CONTROL{" "}
+                <span style={{ color: "#128a0c", marginLeft: "8px" }}>
+                  ● JUST NOW 自動同期中{lastSynced ? `（${lastSynced}）` : ""}
+                </span>
+              </p>
               <h1>景品管理</h1>
             </div>
             <button
               className="refresh-button"
-              onClick={refresh}
+              onClick={() => refresh(true, false)}
               disabled={loading}
             >
               ↻ 最新化

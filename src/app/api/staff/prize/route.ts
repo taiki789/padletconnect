@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "認証されていません。再度ログインしてください。" }, { status: 401 });
     }
     const data = await getPrize();
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
+    });
   } catch (error) {
     console.error("GET /api/staff/prize error:", error);
     const message = error instanceof Error ? error.message : "景品情報の取得に失敗しました。";
@@ -166,7 +168,9 @@ async function handleUpdate(request: NextRequest) {
       }),
     ]);
 
-    return NextResponse.json(next);
+    return NextResponse.json(next, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
+    });
   } catch (error) {
     console.error("Update /api/staff/prize error:", error);
     const message = error instanceof Error ? error.message : "操作処理中にエラーが発生しました。";

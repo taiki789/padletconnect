@@ -73,6 +73,21 @@ export default function Home() {
   const [padletOpened, setPadletOpened] = useState(false);
   const [missionFailedModal, setMissionFailedModal] = useState(false);
   const [trackedScreens, setTrackedScreens] = useState<string[]>([]);
+  const [liveStock, setLiveStock] = useState<{
+    loaded: boolean;
+    currentStock: number;
+    isAccepting: boolean;
+    stock3: number;
+    stock2: number;
+    stock1: number;
+  }>({
+    loaded: false,
+    currentStock: 150,
+    isAccepting: true,
+    stock3: 50,
+    stock2: 50,
+    stock1: 50,
+  });
 
   useEffect(() => {
     const mapReturnAt = Number(
@@ -139,15 +154,61 @@ export default function Home() {
       STORAGE_KEY,
       JSON.stringify({ ...state, redeemed })
     );
-    fetch("/api/prize/status")
-      .then((response) => response.json())
-      .then((result: { currentStock: number; isAccepting: boolean }) => {
-        startTransition(() =>
-          setPrizeAvailable(result.currentStock > 0 && result.isAccepting)
-        );
-      })
-      .catch(() => setPrizeAvailable(true));
   }, [state, redeemed]);
+
+  // 3秒ごとに受付状況・在庫をリアルタイム監視し、受付停止時は進行中のクイズも即座に停止する
+  useEffect(() => {
+    let active = true;
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/prize/status?t=${Date.now()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok || !active) return;
+        const data = (await res.json()) as {
+          currentStock: number;
+          isAccepting: boolean;
+          stock3?: number;
+          stock2?: number;
+          stock1?: number;
+        };
+        if (!active) return;
+        const available = data.currentStock > 0 && data.isAccepting;
+        setLiveStock({
+          loaded: true,
+          currentStock: data.currentStock,
+          isAccepting: data.isAccepting,
+          stock3: data.stock3 ?? 50,
+          stock2: data.stock2 ?? 50,
+          stock1: data.stock1 ?? 50,
+        });
+        setPrizeAvailable(available);
+
+        // 管理画面で「受付停止」または在庫0になった場合、プレイ中の画面も即座に停止画面へ切り替える
+        if (
+          !available &&
+          !redeemed &&
+          ["mission1", "quiz", "result", "mission2", "upload"].includes(
+            state.screen
+          )
+        ) {
+          setMissionFailedModal(false);
+          setState((current) => ({ ...current, screen: "soldout" }));
+        }
+      } catch {
+        // ignore network hiccup
+      }
+    };
+
+    void checkStatus();
+    const timer = setInterval(() => {
+      void checkStatus();
+    }, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [state.screen, redeemed]);
 
   const activeQuizzes = state.quizIds.length
     ? state.quizIds
@@ -174,32 +235,43 @@ export default function Home() {
   };
 
   const start = async () => {
-    setCheckingPrize(true);
-    let stock3 = 50;
-    let stock2 = 50;
-    let stock1 = 50;
-    try {
-      const prizeResponse = await fetch("/api/prize/status", { cache: "no-store" });
-      if (prizeResponse.ok) {
-        const prizeStatus = (await prizeResponse.json()) as {
-          currentStock: number;
-          isAccepting: boolean;
-          stock3?: number;
-          stock2?: number;
-          stock1?: number;
-        };
-        if (prizeStatus.currentStock <= 0 || !prizeStatus.isAccepting) {
-          setState({ ...INITIAL_STATE, screen: "soldout" });
-          return;
-        }
-        stock3 = prizeStatus.stock3 ?? 50;
-        stock2 = prizeStatus.stock2 ?? 50;
-        stock1 = prizeStatus.stock1 ?? 50;
+    let stock3 = liveStock.stock3;
+    let stock2 = liveStock.stock2;
+    let stock1 = liveStock.stock1;
+
+    if (liveStock.loaded) {
+      if (liveStock.currentStock <= 0 || !liveStock.isAccepting) {
+        setState({ ...INITIAL_STATE, screen: "soldout" });
+        return;
       }
-    } catch {
-      // Continue only when the status service is unavailable; the server checks again at redemption.
-    } finally {
-      setCheckingPrize(false);
+    } else {
+      setCheckingPrize(true);
+      try {
+        const prizeResponse = await fetch(
+          `/api/prize/status?t=${Date.now()}`,
+          { cache: "no-store" }
+        );
+        if (prizeResponse.ok) {
+          const prizeStatus = (await prizeResponse.json()) as {
+            currentStock: number;
+            isAccepting: boolean;
+            stock3?: number;
+            stock2?: number;
+            stock1?: number;
+          };
+          if (prizeStatus.currentStock <= 0 || !prizeStatus.isAccepting) {
+            setState({ ...INITIAL_STATE, screen: "soldout" });
+            return;
+          }
+          stock3 = prizeStatus.stock3 ?? 50;
+          stock2 = prizeStatus.stock2 ?? 50;
+          stock1 = prizeStatus.stock1 ?? 50;
+        }
+      } catch {
+        // Continue only when the status service is unavailable; the server checks again at redemption.
+      } finally {
+        setCheckingPrize(false);
+      }
     }
     const quizIds = selectQuizIdsByStock(stock3, stock2, stock1);
     window.localStorage.removeItem(STORAGE_KEY);
