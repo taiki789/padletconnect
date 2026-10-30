@@ -13,6 +13,10 @@ export async function GET(_request: NextRequest) {
         stock3: 0,
         stock2: 0,
         stock1: 0,
+        mission2Reached: 0,
+        mission2Completed: 0,
+        dropoffRate: 0,
+        isSimpleMission2: false,
       });
     }
 
@@ -20,12 +24,25 @@ export async function GET(_request: NextRequest) {
     const snapshot = await db.doc("prize/config").get();
     const prize = snapshot.data();
 
+    const mission2Reached = Number(prize?.mission2Reached ?? 0);
+    const mission2Completed = Number(prize?.mission2Completed ?? 0);
+    const dropoffCount = Math.max(0, mission2Reached - mission2Completed);
+    const dropoffRate =
+      mission2Reached > 0
+        ? Math.round((dropoffCount / mission2Reached) * 100)
+        : 0;
+    const isSimpleMission2 = mission2Reached > 0 && dropoffRate >= 40;
+
     return NextResponse.json({
       currentStock: prize?.currentStock ?? 0,
       isAccepting: prize?.isAccepting ?? false,
       stock3: prize?.stock3 ?? 0,
       stock2: prize?.stock2 ?? 0,
       stock1: prize?.stock1 ?? 0,
+      mission2Reached,
+      mission2Completed,
+      dropoffRate,
+      isSimpleMission2,
     });
   } catch (error) {
     console.error("Failed to fetch prize config:", error);
@@ -36,6 +53,10 @@ export async function GET(_request: NextRequest) {
         stock3: 0,
         stock2: 0,
         stock1: 0,
+        mission2Reached: 0,
+        mission2Completed: 0,
+        dropoffRate: 0,
+        isSimpleMission2: false,
         error: "Internal Server Error",
       },
       { status: 500 }

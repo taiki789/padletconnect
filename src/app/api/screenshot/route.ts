@@ -32,20 +32,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Firestoreの更新（画像ファイル本体は保存せず、フラグのみ更新）
-    if (typeof participationId === "string" && participationId) {
-      try {
-        await getAdminFirestore()
-          .collection("participations")
-          .doc(participationId)
-          .update({
-            screenshotVerified: true,
-            score: Number(score) || 0,
-          });
-      } catch (dbError) {
-        console.error("Firestore update failed:", dbError);
-        // DB更新に失敗してもユーザー進行を止めない場合はこのまま進めるか、エラーレスポンスを返します
+    // Firestoreの更新（画像ファイル本体は保存せず、フラグと完了カウントを更新）
+    try {
+      const db = getAdminFirestore();
+      let alreadyVerified = false;
+
+      if (typeof participationId === "string" && participationId) {
+        const partRef = db.collection("participations").doc(participationId);
+        const partSnap = await partRef.get();
+        if (partSnap.exists && partSnap.data()?.screenshotVerified) {
+          alreadyVerified = true;
+        }
+        await partRef.update({
+          screenshotVerified: true,
+          score: Number(score) || 0,
+        });
       }
+
+      if (!alreadyVerified) {
+        const prizeRef = db.doc("prize/config");
+        const prizeSnap = await prizeRef.get();
+        const prevCompleted = Number(prizeSnap.data()?.mission2Completed ?? 0);
+        await prizeRef.update({
+          mission2Completed: prevCompleted + 1,
+        });
+      }
+    } catch (dbError) {
+      console.error("Firestore update failed:", dbError);
     }
 
     return NextResponse.json({ verified: true });

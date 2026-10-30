@@ -3,7 +3,21 @@ import { isAdminAuthenticated } from "@/lib/auth";
 import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
 
 const prizePath = "prize/config";
-const emptyPrize = { initialStock: 0, currentStock: 0, distributed: 0, isAccepting: false, measurementStarted: false, initialStock3: 0, initialStock2: 0, initialStock1: 0, stock3: 0, stock2: 0, stock1: 0 };
+const emptyPrize = {
+  initialStock: 0,
+  currentStock: 0,
+  distributed: 0,
+  isAccepting: false,
+  measurementStarted: false,
+  initialStock3: 0,
+  initialStock2: 0,
+  initialStock1: 0,
+  stock3: 0,
+  stock2: 0,
+  stock1: 0,
+  mission2Reached: 0,
+  mission2Completed: 0,
+};
 
 async function getPrize() {
   const app = getAdminApp();
@@ -114,6 +128,15 @@ async function handleUpdate(request: NextRequest) {
       logAction = "MANUAL_REDEEM";
       beforeStock = current.currentStock;
       afterStock = nextStock;
+    } else if (body.action === "reset_mission2") {
+      next = {
+        ...current,
+        mission2Reached: 0,
+        mission2Completed: 0,
+      };
+      logAction = "MISSION2_RESET";
+      beforeStock = current.currentStock;
+      afterStock = current.currentStock;
     } else {
       return NextResponse.json({ error: "無効な操作です。" }, { status: 400 });
     }
