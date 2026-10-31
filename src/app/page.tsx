@@ -739,17 +739,38 @@ export default function Home() {
               {state.score} / {activeQuizzes.length}　{rank}
             </strong>
             <span>交換場所</span>
-            <strong>大阪大学 多目的倉庫</strong>
+            <strong>グラウンド横（2F）</strong>
           </div>
-          <div className="map-panel">
-            <iframe
-              className="campus-map-iframe"
-              src={EXCHANGE_MAP_EMBED_URL}
-              title="大阪大学 多目的倉庫 地図"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
-            />
+          <div className="venue-guide-grid">
+            <div className="venue-card">
+              <div className="venue-card-header">
+                <span className="venue-badge">PHOTO GUIDE</span>
+                <strong>建物の外観（外階段から2Fへ）</strong>
+              </div>
+              <img
+                className="venue-photo"
+                src="/exchange-building-2f.jpg"
+                alt="景品交換場所 グラウンド横の建物2F"
+                loading="eager"
+              />
+              <p className="venue-caption">
+                グラウンド横にあるこちらの建物の<strong>外階段を上がった2F</strong>が景品交換場所です！
+              </p>
+            </div>
+            <div className="venue-card">
+              <div className="venue-card-header">
+                <span className="venue-badge">GOOGLE MAP</span>
+                <strong>周辺マップ（グラウンド横）</strong>
+              </div>
+              <iframe
+                className="campus-map-iframe"
+                src={EXCHANGE_MAP_EMBED_URL}
+                title="景品交換場所（グラウンド横）地図"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
+            </div>
           </div>
           <a
             className="action-button secondary link-button"
