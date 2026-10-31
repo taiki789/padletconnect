@@ -80,13 +80,15 @@ export default function Home() {
     stock3: number;
     stock2: number;
     stock1: number;
+    stock0: number;
   }>({
     loaded: false,
-    currentStock: 150,
+    currentStock: 200,
     isAccepting: true,
     stock3: 50,
     stock2: 50,
     stock1: 50,
+    stock0: 50,
   });
 
   useEffect(() => {
@@ -171,6 +173,7 @@ export default function Home() {
           stock3?: number;
           stock2?: number;
           stock1?: number;
+          stock0?: number;
         };
         if (!active) return;
         const available = data.currentStock > 0 && data.isAccepting;
@@ -181,6 +184,7 @@ export default function Home() {
           stock3: data.stock3 ?? 50,
           stock2: data.stock2 ?? 50,
           stock1: data.stock1 ?? 50,
+          stock0: data.stock0 ?? 50,
         });
         setPrizeAvailable(available);
 
@@ -238,6 +242,7 @@ export default function Home() {
     let stock3 = liveStock.stock3;
     let stock2 = liveStock.stock2;
     let stock1 = liveStock.stock1;
+    let stock0 = liveStock.stock0;
 
     if (liveStock.loaded) {
       if (liveStock.currentStock <= 0 || !liveStock.isAccepting) {
@@ -258,6 +263,7 @@ export default function Home() {
             stock3?: number;
             stock2?: number;
             stock1?: number;
+            stock0?: number;
           };
           if (prizeStatus.currentStock <= 0 || !prizeStatus.isAccepting) {
             setState({ ...INITIAL_STATE, screen: "soldout" });
@@ -266,6 +272,7 @@ export default function Home() {
           stock3 = prizeStatus.stock3 ?? 50;
           stock2 = prizeStatus.stock2 ?? 50;
           stock1 = prizeStatus.stock1 ?? 50;
+          stock0 = prizeStatus.stock0 ?? 50;
         }
       } catch {
         // Continue only when the status service is unavailable; the server checks again at redemption.
@@ -273,7 +280,7 @@ export default function Home() {
         setCheckingPrize(false);
       }
     }
-    const quizIds = selectQuizIdsByStock(stock3, stock2, stock1);
+    const quizIds = selectQuizIdsByStock(stock3, stock2, stock1, stock0);
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem("machikanefes-map-return");
     if (window.location.hash) {

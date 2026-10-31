@@ -12,9 +12,11 @@ const emptyPrize = {
   initialStock3: 0,
   initialStock2: 0,
   initialStock1: 0,
+  initialStock0: 0,
   stock3: 0,
   stock2: 0,
   stock1: 0,
+  stock0: 0,
   mission2Reached: 0,
   mission2Completed: 0,
   stepMission1: 0,
@@ -66,7 +68,7 @@ async function handleUpdate(request: NextRequest) {
       throw new Error("Firebaseが初期化されていません。環境変数 FIREBASE_SERVICE_ACCOUNT_KEY を設定してください。");
     }
 
-    let body: { action?: string; stock3?: number; stock2?: number; stock1?: number; note?: string };
+    let body: { action?: string; stock3?: number; stock2?: number; stock1?: number; stock0?: number; note?: string };
     try {
       body = await request.json();
     } catch {
@@ -86,14 +88,15 @@ async function handleUpdate(request: NextRequest) {
     let afterStock = current.currentStock;
 
     if (body.action === "stock") {
-      const values = [body.stock3, body.stock2, body.stock1];
-      if (values.some((value) => !Number.isInteger(value) || (value ?? -1) < 0)) {
-        return NextResponse.json({ error: "景品数は0以上の整数で入力してください。" }, { status: 400 });
-      }
       const stock3 = body.stock3 ?? 0;
       const stock2 = body.stock2 ?? 0;
       const stock1 = body.stock1 ?? 0;
-      const total = stock3 + stock2 + stock1;
+      const stock0 = body.stock0 ?? 0;
+      const values = [stock3, stock2, stock1, stock0];
+      if (values.some((value) => !Number.isInteger(value) || value < 0)) {
+        return NextResponse.json({ error: "景品数は0以上の整数で入力してください。" }, { status: 400 });
+      }
+      const total = stock3 + stock2 + stock1 + stock0;
       next = {
         ...current,
         initialStock: total,
@@ -101,9 +104,11 @@ async function handleUpdate(request: NextRequest) {
         initialStock3: stock3,
         initialStock2: stock2,
         initialStock1: stock1,
+        initialStock0: stock0,
         stock3,
         stock2,
         stock1,
+        stock0,
         isAccepting: total === 0 ? false : current.isAccepting,
       };
       logAction = "STOCK_CHANGE";
@@ -122,7 +127,14 @@ async function handleUpdate(request: NextRequest) {
       beforeStock = current.currentStock;
       afterStock = current.currentStock;
     } else if (body.action === "manual_redeem") {
-      const stockField = current.stock3 > 0 ? "stock3" : current.stock2 > 0 ? "stock2" : "stock1";
+      const stockField =
+        current.stock3 > 0
+          ? "stock3"
+          : current.stock2 > 0
+            ? "stock2"
+            : current.stock1 > 0
+              ? "stock1"
+              : "stock0";
       if (!current.isAccepting || current.currentStock <= 0 || current[stockField] <= 0) {
         return NextResponse.json({ error: "景品数0または受付終了中です。" }, { status: 400 });
       }

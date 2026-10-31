@@ -15,9 +15,11 @@ type Prize = {
   initialStock3: number;
   initialStock2: number;
   initialStock1: number;
+  initialStock0?: number;
   stock3: number;
   stock2: number;
   stock1: number;
+  stock0?: number;
   mission2Reached?: number;
   mission2Completed?: number;
   stepMission1?: number;
@@ -54,9 +56,11 @@ const EMPTY_PRIZE: Prize = {
   initialStock3: 0,
   initialStock2: 0,
   initialStock1: 0,
+  initialStock0: 0,
   stock3: 0,
   stock2: 0,
   stock1: 0,
+  stock0: 0,
   mission2Reached: 0,
   mission2Completed: 0,
   stepMission1: 0,
@@ -96,6 +100,7 @@ export default function StaffDashboard() {
     stock3: "0",
     stock2: "0",
     stock1: "0",
+    stock0: "0",
   });
   const [note, setNote] = useState("");
   const [logs, setLogs] = useState<Log[]>([]);
@@ -120,6 +125,7 @@ export default function StaffDashboard() {
             stock3: String(nextPrize.stock3),
             stock2: String(nextPrize.stock2),
             stock1: String(nextPrize.stock1),
+            stock0: String(nextPrize.stock0 ?? 0),
           });
         }
         setLastSynced(new Date().toLocaleTimeString("ja-JP"));
@@ -201,6 +207,7 @@ export default function StaffDashboard() {
               stock3: Number(stocks.stock3),
               stock2: Number(stocks.stock2),
               stock1: Number(stocks.stock1),
+              stock0: Number(stocks.stock0),
               note,
             }
           : { action, note };
@@ -231,6 +238,7 @@ export default function StaffDashboard() {
         stock3: String(result.stock3),
         stock2: String(result.stock2),
         stock1: String(result.stock1),
+        stock0: String(result.stock0 ?? 0),
       });
       setLastSynced(new Date().toLocaleTimeString("ja-JP"));
       setError("");
@@ -246,8 +254,8 @@ export default function StaffDashboard() {
 
   const requestStockChange = () => {
     if (
-      ![stocks.stock3, stocks.stock2, stocks.stock1].every((value) =>
-        /^[0-9]+$/.test(value)
+      ![stocks.stock3, stocks.stock2, stocks.stock1, stocks.stock0].every(
+        (value) => /^[0-9]+$/.test(value)
       )
     ) {
       setError("景品数は0以上の整数で入力してください。");
@@ -436,6 +444,20 @@ export default function StaffDashboard() {
                   />
                   個
                 </label>
+                <label>
+                  0問正解用景品
+                  <input
+                    inputMode="numeric"
+                    value={stocks.stock0}
+                    onChange={(event) =>
+                      setStocks((current) => ({
+                        ...current,
+                        stock0: event.target.value.replace(/\D/g, ""),
+                      }))
+                    }
+                  />
+                  個
+                </label>
               </div>
               <div className="staff-actions">
                 <button onClick={requestStockChange} disabled={loading}>
@@ -592,7 +614,8 @@ export default function StaffDashboard() {
             <p>
               3問：<strong>{stocks.stock3}個</strong>、2問：
               <strong>{stocks.stock2}個</strong>、1問：
-              <strong>{stocks.stock1}個</strong>で登録します。
+              <strong>{stocks.stock1}個</strong>、0問：
+              <strong>{stocks.stock0}個</strong>で登録します。
             </p>
             <div>
               <button onClick={() => setConfirming(false)}>キャンセル</button>

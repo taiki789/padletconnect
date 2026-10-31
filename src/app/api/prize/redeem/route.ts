@@ -53,20 +53,24 @@ export async function POST(request: Request) {
           ? "stock3"
           : effectiveScore === 2
             ? "stock2"
-            : "stock1";
+            : effectiveScore === 1
+              ? "stock1"
+              : "stock0";
 
       // 該当ランクの在庫がない場合は、在庫がある他のランクから減算するか、全体在庫があれば許可するフォールバック
       const fieldStock = Number(prize[stockField] ?? 0);
       const actualStockField =
         fieldStock > 0
           ? stockField
-          : Number(prize.stock1 ?? 0) > 0
-            ? "stock1"
-            : Number(prize.stock2 ?? 0) > 0
-              ? "stock2"
-              : Number(prize.stock3 ?? 0) > 0
-                ? "stock3"
-                : null;
+          : Number(prize.stock0 ?? 0) > 0
+            ? "stock0"
+            : Number(prize.stock1 ?? 0) > 0
+              ? "stock1"
+              : Number(prize.stock2 ?? 0) > 0
+                ? "stock2"
+                : Number(prize.stock3 ?? 0) > 0
+                  ? "stock3"
+                  : null;
 
       const nextStock = Math.max(0, Number(prize.currentStock ?? 0) - 1);
       const updateData: Record<string, unknown> = {

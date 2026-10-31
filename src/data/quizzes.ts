@@ -178,34 +178,37 @@ export const quizzes: Quiz[] = [
 ];
 
 /**
- * 景品在庫（stock3, stock2, stock1）に応じて難問の数（0〜3問）を決定し、計3問のクイズIDリストを返す
+ * 景品在庫（stock3, stock2, stock1, stock0）に応じて難問の数（0〜3問）を決定し、計3問のクイズIDリストを返す
  * - 3問正解用が多い場合 → 難問0問（3問正解へ誘導）
  * - 2問正解用が多い場合 → 難問1問（2問正解へ誘導）
  * - 1問正解用が多い場合 → 難問2問（1問正解へ誘導）
- * - 3問・2問正解用がほぼ無い／枯渇している場合 → 難問3問（0〜1問正解へ誘導）
+ * - 0問正解用が多い場合、または3問・2問・1問用がほぼ無い場合 → 難問3問（0問正解へ誘導）
  */
 export function selectQuizIdsByStock(
   stock3 = 50,
   stock2 = 50,
-  stock1 = 50
+  stock1 = 50,
+  stock0 = 50
 ): string[] {
   let hardCount = 0;
 
-  if (stock3 <= 0 && stock2 <= 0) {
-    // 3問用・2問用がともに在庫0の場合は3問すべて難問
+  if (stock3 <= 0 && stock2 <= 0 && stock1 <= 0) {
+    // 1〜3問用がすべて在庫0の場合は3問すべて難問
     hardCount = 3;
-  } else if (stock3 <= 0 && stock1 > stock2) {
-    // 3問用が在庫0で、1問用が2問用より多い場合も難問3問
+  } else if (stock0 > stock3 && stock0 > stock2 && stock0 > stock1) {
+    // 0問正解用の在庫が一番多い → 難問3問
     hardCount = 3;
-  } else if (stock3 >= stock2 && stock3 >= stock1) {
+  } else if (stock3 >= stock2 && stock3 >= stock1 && stock3 >= stock0) {
     // 3問正解用の在庫が一番多い（または同率トップ）→ 難問0問
     hardCount = 0;
-  } else if (stock2 >= stock3 && stock2 >= stock1) {
+  } else if (stock2 >= stock3 && stock2 >= stock1 && stock2 >= stock0) {
     // 2問正解用の在庫が一番多い → 難問1問
     hardCount = 1;
+  } else if (stock1 >= stock3 && stock1 >= stock2 && stock1 >= stock0) {
+    // 1問正解用の在庫が一番多い → 難問2問
+    hardCount = 2;
   } else {
-    // 1問正解用の在庫が一番多い → 難問2問（3問用が極端に少ない場合は3問）
-    hardCount = stock3 <= 2 ? 3 : 2;
+    hardCount = 3;
   }
 
   const normalPool = quizzes
