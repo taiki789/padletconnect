@@ -1,6 +1,7 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getAdminApp, getAdminFirestore } from "@/lib/firebase-admin";
+import { invalidateStatusCache } from "@/app/api/prize/status/route";
 
 const prizePath = "prize/config";
 const emptyPrize = {
@@ -179,6 +180,8 @@ async function handleUpdate(request: NextRequest) {
         createdAt: new Date(),
       }),
     ]);
+
+    invalidateStatusCache();
 
     return NextResponse.json(next, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },

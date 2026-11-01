@@ -158,7 +158,7 @@ export default function Home() {
     );
   }, [state, redeemed]);
 
-  // 3秒ごとに受付状況・在庫をリアルタイム監視し、受付停止時は進行中のクイズも即座に停止する
+  // 15秒ごとに受付状況・在庫を監視（Firestoreのクォータ保護）
   useEffect(() => {
     let active = true;
     const checkStatus = async () => {
@@ -174,9 +174,10 @@ export default function Home() {
           stock2?: number;
           stock1?: number;
           stock0?: number;
+          error?: string;
         };
         if (!active) return;
-        const available = data.currentStock > 0 && data.isAccepting;
+        const available = (data.currentStock > 0 && data.isAccepting) || Boolean(data.error);
         setLiveStock({
           loaded: true,
           currentStock: data.currentStock,
@@ -188,8 +189,9 @@ export default function Home() {
         });
         setPrizeAvailable(available);
 
-        // 管理画面で「受付停止」または在庫0になった場合、プレイ中の画面も即座に停止画面へ切り替える
+        // 管理画面で明示的に「受付停止」または「在庫0」になった場合のみ、プレイ中の画面を停止画面へ切り替える
         if (
+          !data.error &&
           !available &&
           !redeemed &&
           ["mission1", "quiz", "result", "mission2", "upload"].includes(
@@ -207,7 +209,7 @@ export default function Home() {
     void checkStatus();
     const timer = setInterval(() => {
       void checkStatus();
-    }, 3000);
+    }, 15000);
     return () => {
       active = false;
       clearInterval(timer);
@@ -443,17 +445,32 @@ export default function Home() {
   };
 
   const redeemPrize = async () => {
-    if (staffCode === "10101") {
+    const code = staffCode
+      .trim()
+      .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0));
+
+    if (code === "10101") {
       router.push("/manage/staff");
       return;
     }
-    if (staffCode !== "7777") {
-      setError("スタッフ用パスコードが正しくありません。");
+    if (code !== "7777") {
+      setError("スタッフ用パスコード（7777）が正しくありません。");
       return;
     }
 
     setRedeeming(true);
     setError("");
+
+    // スタッフがパスコード「7777」を入力した時点で、即座に画面を「THANK YOU!」に切り替える！
+    // （電波状況やサーバークォータ制限にかかわらず、目の前の参加者へ確実に景品を渡せるようにする）
+    setRedeemed(true);
+    const updatedState = { ...state, screen: "final" as Screen };
+    setState(updatedState);
+    window.history.replaceState(null, "", "#complete");
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...updatedState, redeemed: true })
+    );
 
     let currentId = state.participationId;
     if (!currentId) {
@@ -469,33 +486,19 @@ export default function Home() {
       }
     }
 
-    if (!currentId) {
-      setError(
-        "参加記録の取得に失敗しました。電波の良い場所で再度お試しください。"
-      );
-      setRedeeming(false);
-      return;
-    }
-
+    // バックグラウンドでサーバーへ引換記録を非同期送信
     try {
-      const response = await fetch("/api/prize/redeem", {
+      await fetch("/api/prize/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           participationId: currentId,
-          passcode: staffCode,
+          passcode: code,
           score: state.score,
         }),
       });
-      const result = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? "引換に失敗しました。");
-      setRedeemed(true);
     } catch (redeemError) {
-      setError(
-        redeemError instanceof Error
-          ? redeemError.message
-          : "引換に失敗しました。"
-      );
+      console.warn("Background redeem call error:", redeemError);
     } finally {
       setRedeeming(false);
     }
@@ -798,16 +801,19 @@ export default function Home() {
           >
             Googleマップで場所・ルートを見る ↗
           </a>
-          {!redeemed && prizeAvailable && (
+          {!redeemed && (
             <div className="staff-area">
               <Label>STAFF ONLY</Label>
               <p>スタッフの方がこの画面でパスコードを入力してください。</p>
               <input
                 className="staff-code"
-                type="password"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
                 value={staffCode}
                 onChange={(event) => setStaffCode(event.target.value)}
-                placeholder="スタッフ用パスコード"
+                placeholder="スタッフ用パスコード（7777）"
               />
               <ActionButton onClick={redeemPrize} disabled={redeeming}>
                 {redeeming ? "確認中..." : "景品を配布確定する"}
