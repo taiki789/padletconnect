@@ -6,6 +6,8 @@ import {
   EXCHANGE_MAP_EMBED_URL,
   EXCHANGE_MAP_URL,
   PADLET_URL,
+  PADLET_URLS,
+  getRandomPadletUrl,
   quizzes,
   ranks,
   selectQuizIdsByStock,
@@ -71,6 +73,7 @@ export default function Home() {
   const [prizeAvailable, setPrizeAvailable] = useState(true);
   const [checkingPrize, setCheckingPrize] = useState(false);
   const [padletOpened, setPadletOpened] = useState(false);
+  const [currentPadletUrl, setCurrentPadletUrl] = useState<string>(PADLET_URLS[0]);
   const [missionFailedModal, setMissionFailedModal] = useState(false);
   const [trackedScreens, setTrackedScreens] = useState<string[]>([]);
   const [liveStock, setLiveStock] = useState<{
@@ -134,6 +137,13 @@ export default function Home() {
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
   }, [state.screen, state.questionIndex, redeemed]);
+
+  // MISSION 02 または upload 画面に遷移した際に Padlet の遷移先をランダムに選定する
+  useEffect(() => {
+    if (state.screen === "mission2" || state.screen === "upload") {
+      setCurrentPadletUrl(getRandomPadletUrl());
+    }
+  }, [state.screen]);
 
   // MISSION 02 または upload 画面で別タブ/アプリ（Padlet）へ遷移したことを検出する
   useEffect(() => {
@@ -669,10 +679,13 @@ export default function Home() {
           </ul>
           <a
             className="action-button link-button"
-            href={PADLET_URL}
+            href={currentPadletUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => setPadletOpened(true)}
+            onClick={() => {
+              setPadletOpened(true);
+              setTimeout(() => setCurrentPadletUrl(getRandomPadletUrl()), 200);
+            }}
           >
             Padletを開く ↗
           </a>
@@ -709,7 +722,9 @@ export default function Home() {
           <ActionButton
             onClick={() => {
               setPadletOpened(true);
-              window.open(PADLET_URL, "_blank", "noopener,noreferrer");
+              const targetUrl = currentPadletUrl;
+              window.open(targetUrl, "_blank", "noopener,noreferrer");
+              setCurrentPadletUrl(getRandomPadletUrl());
             }}
             secondary
           >

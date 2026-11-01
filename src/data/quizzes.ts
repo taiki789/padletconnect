@@ -228,8 +228,18 @@ export function selectQuizIdsByStock(
 
 export const ranks = ["参加賞相当", "秀", "優秀", "超優秀"] as const;
 
-export const PADLET_URL =
-  "https://padlet.com/tyuujitu/padlet-s023yz9svk0h9sbxq0vq";
+export const PADLET_URLS = [
+  "https://u1.padletusercontent.com/uploads/padlet-uploads-usc1/6357223841/dac885af058127c08343000ce452ddf1/_______.png?token=rK-lZD5TFI9CBrHzSvVDpTFL20rjNbdx43AOls2bxVks9sS9l_0yNonvSxFSLqnhy0m-wcAykYM-wGpEqQiRTbwTaOrDM8hZWIuVhDT2IDS6JAe8Gsih3yIcKB_v_QThqinS04-ED5fnJDPkMhK0hqbOWydIDTkgkpvgwyXkQEy0WwKCFRZL8MyN7E52m49ziKQCYTYERCbQ1_XTt2FlCnk_d20umEXipDM8OQXkwoKaLWVkfxg35KT7U_vfR-I0",
+  "https://u1.padletusercontent.com/uploads/padlet-uploads-usc1/6357223841/58797d6a3b8b8b1a636509212c1f66bb/________PR_____.png?token=rK-lZD5TFI9CBrHzSvVDpTFL20rjNbdx43AOls2bxVks9sS9l_0yNonvSxFSLqnhy0m-wcAykYM-wGpEqQiRTbwTaOrDM8hZWIuVhDT2IDS6JAe8Gsih3yIcKB_v_QTh_0eCQQpzRENMKKog8bR78upYxf0sPuA3RoBM2p59RXq84CmQAL9hvZzQF6Ux704sRFoHpR6-8A6e-PS0XSQvDfSZDiOEnS80_QpNFkIY8l5fCGhWUM2VtWIcmh1Jz3Zq",
+  "https://u1.padletusercontent.com/uploads/padlet-uploads-usc1/6357223841/1025079be52ff69bc808daf530971b8b/________PR_______1_.png?token=rK-lZD5TFI9CBrHzSvVDpTFL20rjNbdx43AOls2bxVks9sS9l_0yNonvSxFSLqnhy0m-wcAykYM-wGpEqQiRTbwTaOrDM8hZWIuVhDT2IDS6JAe8Gsih3yIcKB_v_QTh0jKvoySykFfmptVtBxS5T0GL3XJW5joOxMnDE0a7w7nIzNDLzRZdHsH9x3rdWX-cm5k94kYkAlAxbycEBXgxfhO8PPBTcr66EjejfPAvnI4ZsSgc6YeOamhRo6RR5nc8Zf62ShDZo6EuX2RDS3E8Zw==",
+] as const;
+
+export function getRandomPadletUrl(): string {
+  const index = Math.floor(Math.random() * PADLET_URLS.length);
+  return PADLET_URLS[index];
+}
+
+export const PADLET_URL = PADLET_URLS[0];
 
 export const CAMPUS_MAP_HIGHLIGHT_PATH = "/campus-map-highlight.jpg";
 
