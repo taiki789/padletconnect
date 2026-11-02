@@ -228,18 +228,14 @@ export function selectQuizIdsByStock(
 
 export const ranks = ["参加賞相当", "秀", "優秀", "超優秀"] as const;
 
-export const PADLET_URLS = [
-  "https://padlet.com/tyuujitu/padlet-s023yz9svk0h9sbxq0vq/wish/E1P8aXbYNVnEZwA9",
-  "https://padlet.com/tyuujitu/padlet-s023yz9svk0h9sbxq0vq/wish/YDgnZe2bXexOWwrA",
-  "https://padlet.com/tyuujitu/padlet-s023yz9svk0h9sbxq0vq/wish/do3MQJYvmd05a15w",
-] as const;
+export const PADLET_URL =
+  "https://padlet.com/tyuujitu/padlet-s023yz9svk0h9sbxq0vq";
+
+export const PADLET_URLS = [PADLET_URL] as const;
 
 export function getRandomPadletUrl(): string {
-  const index = Math.floor(Math.random() * PADLET_URLS.length);
-  return PADLET_URLS[index];
+  return PADLET_URL;
 }
-
-export const PADLET_URL = PADLET_URLS[0];
 
 export const CAMPUS_MAP_HIGHLIGHT_PATH = "/campus-map-highlight.jpg";
 
